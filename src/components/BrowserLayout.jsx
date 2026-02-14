@@ -63,19 +63,13 @@ export default function BrowserLayout({ onClose, initialUrl = 'https://codeforce
             </div>
 
             {/* Browser Content */}
-            <div className="flex-1 bg-white relative">
-                <iframe
+            <div className="flex-1 bg-white relative flex flex-col">
+                <webview
                     src={url}
-                    title="In-App Browser"
-                    className="w-full h-full border-none"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-presentation allow-downloads"
+                    className="flex-1 w-full h-full border-none"
+                    allowpopups="true"
+                    webpreferences="contextIsolation=true"
                 />
-                
-                {/* Security/Warning Overlay for some sites */}
-                <div className="absolute bottom-2 right-2 bg-black/80 text-[10px] text-white/50 px-2 py-1 rounded backdrop-blur-md border border-white/10 flex items-center space-x-1">
-                    <Shield size={10} />
-                    <span>Sandboxed Preview</span>
-                </div>
             </div>
         </div>
     );

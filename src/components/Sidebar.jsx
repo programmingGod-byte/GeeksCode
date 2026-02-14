@@ -70,6 +70,7 @@ function TreeItem({ entry, depth, onFileClick, activeFile }) {
 }
 
 import CodeforcesExplorer from './CodeforcesExplorer';
+import CodeforcesProblemFilter from './CodeforcesProblemFilter';
 import CodeRunner from './CodeRunner';
 
 export default function Sidebar({ 
@@ -84,10 +85,20 @@ export default function Sidebar({
     activePanel,
     onCfSettingsClick,
     onOpenProblem,
+    onViewProblem,
     style 
 }) {
     if (activePanel === 'codeforces') {
-        return <CodeforcesExplorer onOpenSettings={onCfSettingsClick} onOpenProblem={onOpenProblem} />;
+        return (
+            <div className="flex flex-col h-full overflow-hidden" style={style}>
+                <div className="flex-1 overflow-hidden" style={{ height: '45%' }}>
+                    <CodeforcesExplorer onOpenSettings={onCfSettingsClick} onOpenProblem={onOpenProblem} />
+                </div>
+                <div className="flex-1 overflow-hidden border-t border-[#3c3c3c]" style={{ height: '55%' }}>
+                     <CodeforcesProblemFilter onOpenProblemFile={onViewProblem} />
+                </div>
+            </div>
+        );
     }
     if (activePanel === 'run') {
         return <CodeRunner activeFile={activeFile} />;

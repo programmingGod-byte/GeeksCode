@@ -1,7 +1,8 @@
 import React from 'react';
 
-export default function StatusBar({ position, language, encoding, theme, onThemeChange, zoomLevel, onZoomIn, onZoomOut, onResetZoom }) {
+export default function StatusBar({ position, language, encoding, theme, onThemeChange, zoomLevel, onZoomIn, onZoomOut, onResetZoom, ragProgress }) {
     const zoomPercent = Math.round((zoomLevel + 1) * 100); // Simple mapping for display
+    const progressPercent = ragProgress ? Math.round(((ragProgress.current + 1) / ragProgress.total) * 100) : 0;
 
     return (
         <div id="status-bar">
@@ -12,6 +13,17 @@ export default function StatusBar({ position, language, encoding, theme, onTheme
                     </svg>
                     <span style={{ marginLeft: '4px', fontWeight: 'bold' }}>GeeksCode</span>
                 </div>
+                
+                {ragProgress && (
+                    <div className="status-item rag-progress-container" title={`Indexing ${ragProgress.filename}`}>
+                        <span className="rag-status-text">
+                            Indexing {ragProgress.type === 'kb' ? 'KB' : 'Project'}: {ragProgress.current + 1}/{ragProgress.total} 
+                        </span>
+                        <div className="rag-progress-bar-bg">
+                            <div className="rag-progress-bar-fill" style={{ width: `${progressPercent}%` }}></div>
+                        </div>
+                    </div>
+                )}
             </div>
             
             <div className="status-right">

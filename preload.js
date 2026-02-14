@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     rag: {
         index: (files) => ipcRenderer.invoke('rag:index', files),
         query: (text) => ipcRenderer.invoke('rag:query', text),
+        indexKB: () => ipcRenderer.invoke('rag:index-kb'),
     },
 
     // Workspace state
@@ -39,7 +40,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
         getSubmissions: (handle) => ipcRenderer.invoke('codeforces:get-submissions', handle),
         getUserInfo: (handle) => ipcRenderer.invoke('codeforces:get-user-info', handle),
         onOpenSettings: (callback) => ipcRenderer.on('codeforces:open-settings', () => callback()),
+        getDatasetMetadata: () => ipcRenderer.invoke('codeforces:get-dataset-metadata'),
+        getFilteredProblems: (filters) => ipcRenderer.invoke('codeforces:get-filtered-problems', filters),
     },
+
+    onRagProgress: (callback) => ipcRenderer.on('rag:progress', (_, data) => callback(data)),
 
     // AI
   // AI
@@ -47,7 +52,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkModel: () => ipcRenderer.invoke('ai:check-model'),
   askAI: (prompt, sessionId) => ipcRenderer.invoke('ai:ask', prompt, sessionId),
   completeAI: (codeContext) => ipcRenderer.invoke('ai:complete', codeContext),
-  onAIDownloadProgress: (callback) => ipcRenderer.on('ai:download-progress', (_, progress) => callback(progress)),
+  onAIDownloadProgress: (callback) => ipcRenderer.on('ai:download-progress', (_, progress, message) => callback(progress, message)),
 
     // Zoom
     setZoom: (level) => ipcRenderer.invoke('app:set-zoom', level),

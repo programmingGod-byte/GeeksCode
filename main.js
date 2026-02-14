@@ -19,25 +19,42 @@ const EXPECTED_MODEL_SIZE = 873582624;
 // ls ~/.config/code-editor/deepseek-1.3b.gguf && rm ~/.config/code-editor/deepseek-1.3b.gguf
 // /home/shivam/.config/code-editor/deepseek-1.3b.gguf
 const deepSeekModelUrl = "https://huggingface.co/TheBloke/deepseek-coder-1.3b-instruct-GGUF/resolve/main/deepseek-coder-1.3b-instruct.Q4_K_M.gguf";
+const NOMIC_MODEL_URL = "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf";
+const NOMIC_FILENAME = "nomic-embed-text-v1.5.Q4_K_M.gguf";
 
-// ... existing code ...
+// ... existing code ...  
 
 ipcMain.handle('ai:delete-model', async () => {
-    const modelPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
+    const deepseekPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
+    const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+    let success = true;
+    
     try {
-        if (fs.existsSync(modelPath)) {
-            fs.unlinkSync(modelPath);
-            model = null; // Reset global model reference
-            context = null; // Reset global context reference
-            sessions.clear(); // Clear all sessions
-            globalAIInitPromise = null; // Allow re-init
-            return true;
+        if (fs.existsSync(deepseekPath)) {
+            fs.unlinkSync(deepseekPath);
         }
-        return false;
     } catch (e) {
-        console.error('Error deleting model:', e);
-        return false;
+        console.error('Error deleting deepseek model:', e);
+        success = false;
     }
+
+    try {
+        if (fs.existsSync(nomicPath)) {
+            fs.unlinkSync(nomicPath);
+        }
+    } catch (e) {
+        console.error('Error deleting nomic model:', e);
+        success = false;
+    }
+
+    if (success) {
+        model = null; // Reset global model reference
+        context = null; // Reset global context reference
+        sessions.clear(); // Clear all sessions
+        globalAIInitPromise = null; // Allow re-init
+        return true;
+    }
+    return false;
 });
 
 function createWindow() {
@@ -54,6 +71,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      webviewTag: true, // Enable <webview> tag
     },
   };
 
@@ -63,19 +81,6 @@ function createWindow() {
   }
 
   mainWindow = new BrowserWindow(windowOptions);
-
-  // ─── Browser View: Strip X-Frame-Options ──────────────────
-  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-    const responseHeaders = Object.assign({}, details.responseHeaders);
-    
-    // Remove headers that block embedding
-    delete responseHeaders['x-frame-options'];
-    delete responseHeaders['X-Frame-Options'];
-    delete responseHeaders['content-security-policy'];
-    delete responseHeaders['Content-Security-Policy'];
-
-    callback({ cancel: false, responseHeaders });
-  });
 
   // In dev mode, load from Vite dev server; in production load the built output
   const isDev = !app.isPackaged;
@@ -254,13 +259,59 @@ ipcMain.handle('fs:createFolder', async (_, folderPath) => {
 });
 
 // ─── IPC: RAG Agent ─────────────────────────────────────────
-ipcMain.handle('rag:index', async (_, projectFiles) => {
-    await ragService.indexProject(projectFiles);
+ipcMain.handle('rag:index', async (event, projectFiles) => {
+    // Ensure RAG service is initialized with model if possible
+    if (!ragService.modelPath) {
+        const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+        if (fs.existsSync(nomicPath)) {
+            console.log("RAG: Auto-initializing for Project index...");
+            await ragService.init(app.getPath('userData'), nomicPath);
+        } else {
+            console.warn("RAG: Cannot index Project, model not found at", nomicPath);
+            return false;
+        }
+    }
+
+    await ragService.indexProject(projectFiles, (current, total, filename) => {
+        if (!event.sender.isDestroyed()) {
+            event.sender.send('rag:progress', { current, total, filename, type: 'project' });
+        }
+    });
     return true;
 });
 
 ipcMain.handle('rag:query', async (_, query) => {
     return ragService.query(query);
+});
+
+// ... (fs:indexProject existing code) ...
+
+// ... (existing code) ...
+
+ipcMain.handle('rag:index-kb', async (event) => {
+    const kbPath = path.join(__dirname, 'src', 'cp_dsa_knowledge_base');
+
+    // Ensure RAG service is initialized with model if possible
+    if (!ragService.modelPath) {
+        const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+        if (fs.existsSync(nomicPath)) {
+             console.log("RAG: Auto-initializing for KB index...");
+             await ragService.init(app.getPath('userData'), nomicPath);
+        } else {
+             console.warn("RAG: Cannot index KB, model not found at", nomicPath);
+             return false;
+        }
+    }
+
+    if (fs.existsSync(kbPath)) {
+        await ragService.indexDirectory(kbPath, (current, total, filename) => {
+            if (!event.sender.isDestroyed()) {
+                event.sender.send('rag:progress', { current, total, filename, type: 'kb' });
+            }
+        });
+        return true;
+    }
+    return false;
 });
 
 ipcMain.handle('fs:indexProject', async (_, rootPath) => {
@@ -378,27 +429,27 @@ ipcMain.on('terminal:cwd', (_, cwd) => {
 
 // ─── AI Integration ─────────────────────────────────────────
 
-async function downloadDeepSeek(event) {
-  const savePath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
+async function downloadModel(event, url, filename, expectedSize = null, displayName = "Model") {
+  const savePath = path.join(app.getPath('userData'), filename);
 
   if (fs.existsSync(savePath)) {
       const stats = fs.statSync(savePath);
-      if (stats.size === EXPECTED_MODEL_SIZE) {
-          console.log("Model already exists and size matches.");
+      if (!expectedSize || stats.size === expectedSize) {
+          console.log(`${displayName} already exists and size matches (or no size check).`);
           return savePath;
       }
-      console.warn(`Model size mismatch: found ${stats.size}, expected ${EXPECTED_MODEL_SIZE}. Re-downloading...`);
+      console.warn(`${displayName} size mismatch: found ${stats.size}, expected ${expectedSize}. Re-downloading...`);
       fs.unlinkSync(savePath); // remove corrupted file
   }
 
   try {
       const response = await axios({ 
-          url: deepSeekModelUrl, 
+          url: url, 
           method: 'GET', 
           responseType: 'stream' 
       });
       
-      const totalSize = parseInt(response.headers['content-length'], 10) || EXPECTED_MODEL_SIZE;
+      const totalSize = parseInt(response.headers['content-length'], 10) || expectedSize;
       let downloaded = 0;
 
       return new Promise((resolve, reject) => {
@@ -407,7 +458,7 @@ async function downloadDeepSeek(event) {
             downloaded += chunk.length;
             if (event && !event.sender.isDestroyed()) {
                 const progress = totalSize ? ((downloaded / totalSize) * 100).toFixed(2) : 0;
-                event.sender.send('ai:download-progress', progress);
+                event.sender.send('ai:download-progress', progress, `Downloading ${displayName}...`);
             }
         });
 
@@ -416,9 +467,9 @@ async function downloadDeepSeek(event) {
         writer.on('finish', () => {
              // Second verification after download
              const stats = fs.statSync(savePath);
-             if (stats.size !== totalSize) {
+             if (totalSize && stats.size !== totalSize) {
                  fs.unlink(savePath, () => {});
-                 reject(new Error(`Download incomplete: expected ${totalSize} bytes, got ${stats.size} bytes`));
+                 reject(new Error(`Download incomplete for ${displayName}: expected ${totalSize} bytes, got ${stats.size} bytes`));
              } else {
                  resolve(savePath);
              }
@@ -429,7 +480,7 @@ async function downloadDeepSeek(event) {
         });
       });
   } catch (error) {
-      console.error("Download failed:", error);
+      console.error(`Download failed for ${displayName}:`, error);
       throw error;
   }
 }
@@ -448,7 +499,7 @@ async function initDeepSeek(modelPath, sessionId = 'default') {
              console.log("AI: Initializing Llama backend...");
              
              // Conservative initialization: CPU-only to avoid SIGILL/CUDA issues
-             let currentLlama = await getLlama("cpu");
+             let currentLlama = await getLlama({ gpu: false });
              llama = currentLlama;
              
              console.log("AI: Backend initialized. Loading model...");
@@ -456,7 +507,7 @@ async function initDeepSeek(modelPath, sessionId = 'default') {
                  try {
                      model = await llama.loadModel({ 
                          modelPath,
-                         gpuLayers: 0 // Force CPU for stability
+                         // gpuLayers: 0
                      });
                      console.log("AI: Model loaded successfully.");
                  } catch (loadErr) {
@@ -469,7 +520,7 @@ async function initDeepSeek(modelPath, sessionId = 'default') {
                  console.log("AI: Creating context...");
                  context = await model.createContext({
                      contextSize: 2048,
-                     sequences: 1 // Single sequence for stability
+                     sequences: 2 // Allow Chat + Complexity sessions
                  });
                  console.log("AI: Context created.");
              }
@@ -520,19 +571,52 @@ async function initDeepSeek(modelPath, sessionId = 'default') {
 // IPC Handlers
 ipcMain.handle('ai:init', async (event, sessionId = 'default') => {
     try {
-        const modelPath = await downloadDeepSeek(event);
+        // Download DeepSeek
+        const modelPath = await downloadModel(event, deepSeekModelUrl, 'deepseek-1.3b.gguf', EXPECTED_MODEL_SIZE, "DeepSeek Coder");
+        
+        // Download Nomic
+        const nomicPath = await downloadModel(event, NOMIC_MODEL_URL, NOMIC_FILENAME, null, "Nomic Embed");
+
+        // Initialize RAG Service
+        await ragService.init(app.getPath('userData'), nomicPath);
+
         await initDeepSeek(modelPath, sessionId);
+
+        /*
+        // Auto-index Knowledge Base if not already done
+        const kbPath = path.join(__dirname, 'src', 'cp_dsa_knowledge_base');
+        if (fs.existsSync(kbPath)) {
+            console.log("RAG: Auto-indexing KB after initial download...");
+            // Use the optimized indexDirectory which skips already indexed files
+            await ragService.indexDirectory(kbPath, (current, total, filename) => {
+                if (!event.sender.isDestroyed()) {
+                    event.sender.send('rag:progress', { current, total, filename, type: 'kb' });
+                }
+            });
+        }
+        */
+
         return { success: true };
     } catch (error) {
         return { success: false, error: error.message };
     }
 });
 
+
+
 ipcMain.handle('ai:check-model', () => {
-    const modelPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
-    if (!fs.existsSync(modelPath)) return false;
-    const stats = fs.statSync(modelPath);
-    return stats.size === EXPECTED_MODEL_SIZE;
+    const deepseekPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
+    const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+    
+    // Check DeepSeek
+    if (!fs.existsSync(deepseekPath)) return false;
+    const stats = fs.statSync(deepseekPath);
+    if (stats.size !== EXPECTED_MODEL_SIZE) return false;
+    
+    // Check Nomic (optional size check if we knew it, for now just existence)
+    if (!fs.existsSync(nomicPath)) return false;
+    
+    return true;
 });
 
 ipcMain.handle('ai:ask', async (event, userPrompt, sessionId = 'default') => {
@@ -540,15 +624,9 @@ ipcMain.handle('ai:ask', async (event, userPrompt, sessionId = 'default') => {
   
   // Auto-initialize if session is missing (e.g., recycled)
   if (!sessionData) {
-      console.log(`Session ${sessionId} not found (likely recycled). Re-initializing...`);
-      // We need the model path. We can try to use the one from userData if available.
-      const modelPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
-      if (fs.existsSync(modelPath)) {
-          const success = await initDeepSeek(modelPath, sessionId);
-          if (success) {
-              sessionData = sessions.get(sessionId);
-          }
-      }
+      console.log(`AI: Session "${sessionId}" not found (likely recycled). Re-initializing...`);
+      await initDeepSeek(path.join(app.getPath('userData'), 'deepseek-1.3b.gguf'), sessionId);
+      sessionData = sessions.get(sessionId);
   }
 
   if (!sessionData) {
@@ -557,12 +635,40 @@ ipcMain.handle('ai:ask', async (event, userPrompt, sessionId = 'default') => {
   }
   const { session } = sessionData;
   try {
-      console.log(`[Session ${sessionId}] AI Prompt: "${userPrompt}"`);
-      const response = await session.prompt(userPrompt);
-      console.log(`[Session ${sessionId}] AI Response: "${response}"`);
+      let augmentedPrompt = userPrompt;
+
+      // Only perform RAG retrieval for general chat, skip for specialized tasks like complexity analysis
+      // We also check if the prompt looks like it's asking for personal/config stuff that shouldn't search docs
+      // skip RAG for very short messages or greetings
+      const isGreeting = /^(hi|hello|hey|hola|yo|hello there)/i.test(userPrompt.trim());
+      const tooShort = userPrompt.trim().length < 10;
+      const skipRAG = sessionId === 'complexity-session' || sessionId.startsWith('system-') || isGreeting || tooShort;
+      
+      if (!skipRAG) {
+          console.log(`AI: [Session ${sessionId}] Retrieving RAG context...`);
+          // Strictly request only 3 chunks
+          const contextItems = await ragService.query(userPrompt, 3).catch(e => {
+              console.warn("RAG: Query failed, skipping context", e);
+              return [];
+          });
+          
+          if (contextItems.length > 0) {
+              const contextString = contextItems.map(item => `[Source: ${item.source}]\n${item.text}`).join("\n\n");
+              // Final safety truncation of context string
+              const truncatedContext = contextString.substring(0, 4000); 
+              augmentedPrompt = `Relevant Context:\n---------------------\n${truncatedContext}\n---------------------\nInstruction: Use the context above if relevant, otherwise use your general knowledge. Respond to: ${userPrompt}`;
+              console.log(`AI: [Session ${sessionId}] Augmented prompt with ${contextItems.length} chunks.`);
+          }
+      } else {
+          console.log(`AI: [Session ${sessionId}] Skipping RAG augmentation (Session: ${sessionId}, Greeting/Short: ${isGreeting||tooShort}).`);
+      }
+
+      console.log(`AI: [Session ${sessionId}] Sending prompt to model...`);
+      const response = await session.prompt(augmentedPrompt);
+      console.log(`AI: [Session ${sessionId}] Response received.`);
       return response || "(Empty response from AI)";
   } catch (error) {
-      console.error(`[Session ${sessionId}] AI Prompt failed:`, error);
+      console.error(`AI: [Session ${sessionId}] Prompt failed:`, error);
       return `Error: ${error.message}`;
   }
 });
@@ -636,6 +742,94 @@ ipcMain.handle('codeforces:get-creds', async () => {
     return JSON.parse(fs.readFileSync(configPath, 'utf8'));
   }
   return null;
+});
+
+// ─── Codeforces Dataset Filtering ──────────────────────────
+const DATASET_PATH = path.join(__dirname, 'src', 'codeforces_dataset');
+
+ipcMain.handle('codeforces:get-dataset-metadata', async () => {
+    try {
+        if (!fs.existsSync(DATASET_PATH)) return { topics: [], ratings: [], tags: [] };
+
+        const topics = fs.readdirSync(DATASET_PATH).filter(f => fs.statSync(path.join(DATASET_PATH, f)).isDirectory());
+        const ratingsSet = new Set();
+        const tagsSet = new Set();
+
+        for (const topic of topics) {
+            const topicPath = path.join(DATASET_PATH, topic);
+            const ratings = fs.readdirSync(topicPath).filter(f => fs.statSync(path.join(topicPath, f)).isDirectory());
+            ratings.forEach(r => ratingsSet.add(r));
+
+            for (const rating of ratings) {
+                const ratingPath = path.join(topicPath, rating);
+                const files = fs.readdirSync(ratingPath).filter(f => f.endsWith('.json'));
+                
+                // Sample some files to get tags (scanning all might be slow, but let's try for now if dataset is medium)
+                for (const file of files) {
+                    try {
+                        const content = JSON.parse(fs.readFileSync(path.join(ratingPath, file), 'utf-8'));
+                        if (content.tags) content.tags.forEach(t => tagsSet.add(t));
+                    } catch (e) { /* ignore corrupt files */ }
+                }
+            }
+        }
+
+        return {
+            topics: topics.sort(),
+            ratings: Array.from(ratingsSet).sort((a, b) => parseInt(a) - parseInt(b)),
+            tags: Array.from(tagsSet).sort()
+        };
+    } catch (e) {
+        console.error('Error getting CF dataset metadata:', e);
+        return { topics: [], ratings: [], tags: [] };
+    }
+});
+
+ipcMain.handle('codeforces:get-filtered-problems', async (_, filters) => {
+    const { topic, rating, tag, search } = filters;
+    const problems = [];
+    
+    try {
+        if (!fs.existsSync(DATASET_PATH)) return [];
+
+        const scanTopics = topic ? [topic] : fs.readdirSync(DATASET_PATH).filter(f => fs.statSync(path.join(DATASET_PATH, f)).isDirectory());
+
+        for (const t of scanTopics) {
+            const topicPath = path.join(DATASET_PATH, t);
+            const scanRatings = rating ? [rating] : fs.readdirSync(topicPath).filter(f => fs.statSync(path.join(topicPath, f)).isDirectory());
+
+            for (const r of scanRatings) {
+                const ratingPath = path.join(topicPath, r);
+                if (!fs.existsSync(ratingPath)) continue;
+
+                const files = fs.readdirSync(ratingPath).filter(f => f.endsWith('.json'));
+                for (const file of files) {
+                    try {
+                        const filePath = path.join(ratingPath, file);
+                        const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+                        
+                        // Apply filters
+                        if (tag && (!content.tags || !content.tags.includes(tag))) continue;
+                        if (search && !content.title.toLowerCase().includes(search.toLowerCase())) continue;
+
+                        problems.push({
+                            title: content.title,
+                            contestId: content.contestId,
+                            index: content.index,
+                            rating: content.rating,
+                            tags: content.tags,
+                            path: filePath,
+                            topic: t
+                        });
+                    } catch (e) { /* ignore */ }
+                }
+            }
+        }
+        return problems;
+    } catch (e) {
+        console.error('Error filtering problems:', e);
+        return [];
+    }
 });
 
 // ─── IPC: Editor State ────────────────────────────────────────
