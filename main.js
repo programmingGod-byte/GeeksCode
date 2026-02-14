@@ -6,6 +6,7 @@ const pty = require('node-pty');
 const axios = require('axios');
 const ragService = require('./src/utils/ragService');
 const codeModel = require('./src/utils/codeModel');
+const { LucideEthernetPort } = require('lucide-react');
 
 let mainWindow;
 let ptyProcess = null;
@@ -157,12 +158,51 @@ function createWindow() {
   );
 }
 
-ipcMain.handle('submit-code', async (event, code) => {
-  const modelPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
-  await codeModel.init(modelPath);
-  const finalCppCode = await codeModel.query(code);
-  console.log(finalCppCode);
+function ParseCode(code) {
+  const lines = code.split('\n')
+  const results = []
 
+  for (const line of lines) {
+    let i = 0
+    while (i < line.length) {
+      if (
+        line[i] === '!' &&
+        line[i + 1] === '@' &&
+        line[i + 2] === '#' &&
+        line[i + 3] === '$'
+      ) {
+        i += 4
+        if (line[i] !== '(') {
+          return 'Invalid Syntax'
+        }
+        i++
+        let temp = ''
+        while (i < line.length && line[i] !== ')') {
+          temp += line[i]
+          i++
+        }
+        if (i >= line.length) {
+          return 'Invalid Syntax'
+        }
+        results.push(temp)
+      }
+      i++
+    }
+  }
+  return results
+}
+
+ipcMain.handle('submit-code', async (event, code) => {
+  let prompts = ParseCode(code)
+  let finalCppCode;
+  if (prompts.length !== 0) {
+    const modelPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
+    await codeModel.init(modelPath);
+    finalCppCode = await codeModel.query(code);
+    console.log(finalCppCode);
+  } else {
+    finalCppCode = code;
+  }
   const tmpDir = os.tmpdir()
   const cppPath = path.join(tmpDir, 'temp.cpp')
   fs.writeFileSync(cppPath, finalCppCode)
