@@ -13,6 +13,7 @@ import QuickOpenModal from './components/QuickOpenModal';
 import CodeforcesSettingsModal from './components/CodeforcesSettingsModal';
 import BrowserLayout from './components/BrowserLayout';
 import InputModal from './components/InputModal';
+import ProblemViewer from './components/ProblemViewer';
 import { FilePlus, FolderPlus, Globe } from 'lucide-react';
 import { getLanguage, getLanguageLabel } from './utils/fileUtils';
 
@@ -42,7 +43,9 @@ export default function App() {
     const [showBrowser, setShowBrowser] = useState(false);
     const [browserUrl, setBrowserUrl] = useState('https://codeforces.com');
     const [inputModal, setInputModal] = useState({ isOpen: false, title: '', placeholder: '', onSubmit: () => {} });
+    const [viewingProblem, setViewingProblem] = useState(null);
 
+    const [ragProgress, setRagProgress] = useState(null);
     const editorRef = useRef(null);
     const terminalRef = useRef(null);
 
@@ -53,6 +56,19 @@ export default function App() {
             setProjectFiles(files);
         } catch (err) {
             console.error("Indexing failed:", err);
+        }
+    }, []);
+
+    // ─── RAG Progress Listener ──────────────────────────
+    useEffect(() => {
+        if (window.electronAPI && window.electronAPI.onRagProgress) {
+            window.electronAPI.onRagProgress((data) => {
+                setRagProgress(data);
+                // If finished (current + 1 === total), clear after a delay
+                if (data.current + 1 >= data.total) {
+                    setTimeout(() => setRagProgress(null), 3000);
+                }
+            });
         }
     }, []);
 
@@ -253,7 +269,24 @@ export default function App() {
         const newTab = { filePath, fileName, content, language, isDirty: false };
         setOpenTabs((prev) => [...prev, newTab]);
         setActiveTab(filePath);
+        setViewingProblem(null); // Close viewer if a normal file is opened
     }, [openTabs]);
+
+    const handleViewProblem = useCallback(async (filePath) => {
+        try {
+            const content = await window.electronAPI.readFile(filePath);
+            if (content) {
+                const problemData = JSON.parse(content);
+                problemData.path = filePath;
+                setViewingProblem(problemData);
+                setActiveTab(null);
+            }
+        } catch (e) {
+            console.error("Failed to parse problem JSON:", e);
+            // Fallback to normal file click if parsing fails
+            handleFileClick(filePath);
+        }
+    }, [handleFileClick]);
 
     // ─── Complexity Analysis ────────────────────────────
     const handleAnalyzeComplexity = useCallback(async () => {
@@ -358,6 +391,13 @@ ${content}
                 }
             }
         });
+    }, [folderPath, handleIndexProject]);
+
+    // ─── Automatic Indexing (Optimized to skip existing) ──────────
+    useEffect(() => {
+        if (folderPath) {
+            handleIndexProject(folderPath);
+        }
     }, [folderPath, handleIndexProject]);
 
     // ─── Switch Tab ─────────────────────────────────────
@@ -507,6 +547,7 @@ ${content}
                         setBrowserUrl(url);
                         setShowBrowser(true);
                     }}
+                    onViewProblem={handleViewProblem}
                     style={{ width: `${sidebarWidth}px` }}
                     theme={theme}
                 />
@@ -526,7 +567,12 @@ ${content}
                         />
                         <div className="flex-1 flex overflow-hidden">
                             <div className={`flex-1 flex flex-col min-w-0 ${showBrowser ? 'border-r border-[#2b2b2b]' : ''}`}>
-                                {activeTab ? (
+                                {viewingProblem ? (
+                                    <ProblemViewer 
+                                        problem={viewingProblem} 
+                                        onClose={() => setViewingProblem(null)} 
+                                    />
+                                ) : activeTab ? (
                                     <MonacoEditor
                                         activeTab={activeTab}
                                         tabs={openTabs}
@@ -581,6 +627,7 @@ ${content}
                 onZoomIn={handleZoomIn}
                 onZoomOut={handleZoomOut}
                 onResetZoom={handleResetZoom}
+                ragProgress={ragProgress}
             />
             <QuickOpenModal 
                 isOpen={showQuickOpen}

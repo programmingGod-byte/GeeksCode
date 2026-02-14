@@ -4,25 +4,25 @@ import { Download, AlertCircle, CheckCircle, X } from 'lucide-react';
 const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
     const [downloading, setDownloading] = useState(false);
     const [progress, setProgress] = useState(0);
+    const [message, setMessage] = useState("Downloading...");
     const [error, setError] = useState(null);
     const [isComplete, setIsComplete] = useState(false);
 
     useEffect(() => {
         // Listen for download progress
         if (window.electronAPI && window.electronAPI.onAIDownloadProgress) {
-            window.electronAPI.onAIDownloadProgress((prog) => {
+            window.electronAPI.onAIDownloadProgress((prog, msg) => {
                 setProgress(prog);
+                if (msg) setMessage(msg);
                 if (prog >= 100) {
-                    setIsComplete(true);
-                    setDownloading(false);
-                     setTimeout(() => {
-                        onDownloadComplete();
-                    }, 1500);
+                   // Progress reached 100% for a file. 
+                   // We wait for the promise to resolve for final completion.
                 }
             });
         }
     }, [onDownloadComplete]);
 
+    // ... (handleDownload, handleDelete unchanged) ...
     const handleDownload = async () => {
         setDownloading(true);
         setError(null);
@@ -31,6 +31,12 @@ const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
             if (!result.success) {
                 setError(result.error);
                 setDownloading(false);
+            } else {
+                setDownloading(false);
+                setIsComplete(true);
+                setTimeout(() => {
+                    onDownloadComplete();
+                }, 1500);
             }
         } catch (err) {
             setError(err.message);
@@ -77,8 +83,8 @@ const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
                     
                     <p className="text-gray-400 text-sm mb-6 max-w-[80%]">
                         {isComplete 
-                            ? "DeepSeek Coder 1.3B is installed and ready to use."
-                            : "GeeksCode uses DeepSeek Coder 1.3B for local AI assistance. Ideally, this requires downloading ~1.3GB of data."
+                            ? "AI Models are installed and ready to use."
+                            : "GeeksCode uses DeepSeek Coder 1.3B and Nomic Embed Text for local AI assistance. Ideally, this requires downloading ~1.5GB of data."
                         }
                     </p>
 
@@ -101,7 +107,7 @@ const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
                                 onClick={handleDownload}
                                 className="px-6 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded shadow-lg transition-all transform hover:scale-105"
                             >
-                                Download Model (1.3GB)
+                                Download Models (~1.5GB)
                             </button>
                         </div>
                     )}
@@ -112,7 +118,7 @@ const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
                                 onClick={handleDelete}
                                 className="px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded transition-colors border border-red-900/50"
                             >
-                                Delete Model
+                                Delete Models
                             </button>
                             <button
                                 onClick={onClose}
@@ -125,9 +131,9 @@ const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
 
                     {downloading && (
                         <div className="w-full">
-                            <div className="flex justify-betweentext-xs text-gray-400 mb-1">
-                                <span>Downloading...</span>
-                                <span>{progress}%</span>
+                            <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                <span>{message}</span>
+                                <span>{Math.round(progress)}%</span>
                             </div>
                             <div className="w-full bg-[#2d2d2d] h-2 rounded-full overflow-hidden">
                                 <div 

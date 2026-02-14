@@ -1,0 +1,13 @@
+{
+    "contestId": 2141,
+    "index": "I",
+    "title": "I. Color the Tree",
+    "statement": "You are given a tree consisting of $$$n$$$ vertices. Initially, none of the vertices of the tree are colored.\nYou can perform the following operation: choose any two vertices $$$u$$$ and $$$v$$$ (you are allowed to choose $$$u=v$$$) and color all the vertices on the path between them (including the endpoints) with color $$$i$$$, where $$$i$$$ is the index of the operation you are performing (that is, the first operation uses color $$$1$$$, the second uses color $$$2$$$, and so on). If any vertex on the path has already been colored before, its color changes to the new one.\nWe call the coloring of the tree\ncomplete\nif for each vertex, at least one operation has colored it.\nYour task is to calculate two values:\nthe minimum number of operations required to achieve a complete coloring;\nthe number of distinct complete colorings that can be obtained with the minimum number of operations (two colorings are considered different if there exists at least one vertex $$$v$$$ such that the color of $$$v$$$ in the first coloring differs from the color of $$$v$$$ in the second coloring).",
+    "inputSpecification": "Input\nThe first line contains a single integer $$$n$$$ ($$$3 \\le n \\le 32$$$) — the number of vertices in the tree.\nThe next $$$(n-1)$$$ lines contain two integers $$$x_i$$$ and $$$y_i$$$ ($$$1 \\le x_i, y_i \\le n$$$; $$$x_i \\ne y_i$$$) — the endpoints of the next edge of the tree.\nAdditional constraint on the input: the edges define a valid tree with $$$n$$$ vertices.",
+    "outputSpecification": "Output\nPrint two integers — the minimum number of operations and the number of distinct complete colorings that can be obtained with the minimum number of operations. Since the second number can be very large, output it modulo $$$998244353$$$.",
+    "note": "",
+    "tags": [
+        "*special"
+    ],
+    "rating": 3500
+}

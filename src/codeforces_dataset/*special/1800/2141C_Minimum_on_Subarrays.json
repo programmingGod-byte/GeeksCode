@@ -1,0 +1,14 @@
+{
+    "contestId": 2141,
+    "index": "C",
+    "title": "C. Minimum on Subarrays",
+    "statement": "There is a variable $$$sum$$$, which is initially equal to $$$0$$$.\nThere is also a data structure that can perform the following operations:\npushback\nx\n— adds an element with value $$$x$$$ to the end of the structure;\npushfront\nx\n— adds an element with value $$$x$$$ to the beginning of the structure;\npopback\n— removes the last element from the structure;\npopfront\n— removes the first element from the structure;\nmin\n— adds the value of the minimum element currently in the structure to the variable $$$sum$$$.\nThe operations\npopback\n,\npopfront\n, and\nmin\ncannot be applied to an empty structure!\nUsing this structure, you would like to be able to find the sum of the minimums of all non-empty subarrays of an array $$$a$$$ of $$$n$$$ elements.\nMore formally, your task is to find a sequence of no more than $$$n \\cdot (n + 2)$$$ commands such that after all operations, the variable $$$sum$$$ will be equal to $$$\\sum_{0 \\le l \\le r  \\lt  n} \\min(a[l],\\dots, a[r])$$$ for any possible array $$$a$$$.",
+    "inputSpecification": "Input\nThe first line contains a single integer $$$n$$$ ($$$1 \\le n \\le 500$$$) — the number of elements in the array.",
+    "outputSpecification": "Output\nOutput $$$k$$$ ($$$1 \\le k \\le n \\cdot (n + 2)$$$) commands. Each command must be one of the following five lines:\n\"\npushback\na[i]\n\", where $$$i$$$ — a number from $$$0$$$ to $$$n - 1$$$\n\"\npushfront\na[i]\n\", where $$$i$$$ — a number from $$$0$$$ to $$$n - 1$$$\n\"\npopback\n\"\n\"\npopfront\n\"\n\"\nmin\n\"\nIf there are multiple valid answers, output any.",
+    "note": "",
+    "tags": [
+        "*special",
+        "brute force"
+    ],
+    "rating": 1800
+}

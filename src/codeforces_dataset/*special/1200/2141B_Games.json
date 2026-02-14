@@ -1,0 +1,14 @@
+{
+    "contestId": 2141,
+    "index": "B",
+    "title": "B. Games",
+    "statement": "Alice and Bob are planning to play an online game together but haven't decided on which one yet. Alice has a list of $$$n$$$ games she enjoys: $$$a_1, a_2, \\dots, a_n$$$. Bob, on the other hand, has a list of $$$m$$$ games he likes: $$$b_1, b_2, \\dots, b_m$$$. They share at least one game in common between their lists.\nTo choose a game, they take turns suggesting games from their lists. Alice begins by suggesting one of her favorite games. If Bob likes it, they play that game. If not, Bob suggests one of his favorite games. If Alice likes it, they play that game. This alternating process continues, with Alice and Bob each suggesting games from their lists in turn, ensuring that no game is suggested more than once.\nYour task is to calculate the\nmaximum possible\nnumber of suggestions they will make while choosing which game to play.",
+    "inputSpecification": "Input\nThe first line contains a single integer $$$t$$$ ($$$1 \\le t \\le 1000$$$) — the number of test cases.\nThe first line of each test case contains two integers $$$n$$$ and $$$m$$$ ($$$1 \\le n, m \\le 100$$$).\nThe second line contains $$$n$$$ integers $$$a_1  \\lt  a_2  \\lt  \\cdots  \\lt  a_n$$$ ($$$1 \\le a_i \\le 100$$$).\nThe third line contains $$$m$$$ integers $$$b_1  \\lt  b_2  \\lt  \\cdots  \\lt  b_m$$$ ($$$1 \\le b_i \\le 100$$$).\nArrays $$$a$$$ and $$$b$$$ contain at least one common integer.",
+    "outputSpecification": "Output\nFor each test case, print a single integer — the\nmaximum possible\nnumber of suggestions they will make while choosing which game to play.",
+    "note": "Note\nIn the first test case, the maximum number of suggestions is $$$3$$$. It is achieved as follows:\nAlice suggests game $$$1$$$, but Bob does not like it;\nBob suggests game $$$5$$$, but Alice does not like it;\nAlice suggests game $$$2$$$, which Bob likes, and they go to play that game.\nIn the second test case, Alice can only suggest game $$$5$$$, which Bob likes, so they will immediately go to play it.\nIn the third test case, the maximum number of suggestions is $$$4$$$. It is achieved as follows:\nAlice suggests game $$$7$$$, but Bob does not like it;\nBob suggests game $$$6$$$, but Alice does not like it;\nAlice suggests game $$$1$$$, but Bob does not like it;\nBob suggests game $$$4$$$, which Alice likes, and they go to play it.",
+    "tags": [
+        "*special",
+        "greedy"
+    ],
+    "rating": 1200
+}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Bot, User, Download, Loader, Trash2, Plus, MessageSquare, X } from 'lucide-react';
+import { Send, Bot, User, Download, Loader, Trash2, Plus, MessageSquare, X, Database } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -382,15 +382,39 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
         ));
     };
 
+    const handleIndexKB = async () => {
+        if (window.electronAPI && window.electronAPI.rag) {
+            setLoading(true);
+            updateAgentMessage("📚 **RAG**: Indexing Knowledge Base...");
+            try {
+                const success = await window.electronAPI.rag.indexKB();
+                if (success) {
+                    updateAgentMessage("✅ **RAG**: Knowledge Base Indexed Successfully.");
+                } else {
+                    updateAgentMessage("❌ **RAG**: Failed to index Knowledge Base (Check if folder exists).");
+                }
+            } catch (e) {
+                updateAgentMessage(`❌ **RAG**: Error indexing: ${e.message}`);
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
+
     return (
         <div className={`flex flex-col h-full ${isDark ? 'bg-[#1e1e1e]' : 'bg-white'} text-vscode-text font-sans border-l border-[#2b2b2b]`}>
             {/* Header & Session Switcher */}
             <div className={`px-2 flex flex-col ${isDark ? 'bg-[#252526]' : 'bg-[#f3f3f3]'} border-b border-[#2b2b2b] select-none`}>
                 <div className="h-9 flex items-center justify-between px-2">
                     <span className="font-bold text-[10px] uppercase tracking-wide opacity-70">AI Sessions</span>
-                    <button onClick={createNewSession} className="p-1 hover:bg-white/10 rounded" title="New Chat">
-                        <Plus size={14} />
-                    </button>
+                    <div className="flex space-x-1">
+                        <button onClick={handleIndexKB} className="p-1 hover:bg-white/10 rounded" title="Index RAG Knowledge Base">
+                            <Database size={14} />
+                        </button>
+                        <button onClick={createNewSession} className="p-1 hover:bg-white/10 rounded" title="New Chat">
+                            <Plus size={14} />
+                        </button>
+                    </div>
                 </div>
                 <div className="flex space-x-1 overflow-x-auto pb-1 no-scrollbar">
                     {sessions.map(s => (

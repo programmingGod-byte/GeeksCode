@@ -716,7 +716,6 @@ body.light .theme-toggle .icon-moon {
 #terminal-container {
   padding: 4px 0 4px 8px;
   height: calc(100% - var(--panel-header-height));
-  overflow: hidden;
 }
 
 /* ─── Status Bar ─────────────────────────────────── */
@@ -730,6 +729,37 @@ body.light .theme-toggle .icon-moon {
   font-size: 12px;
   color: #ffffff;
   flex-shrink: 0;
+}
+
+.rag-progress-container {
+    display: flex;
+    align-items: center;
+    margin-left: 15px;
+    gap: 8px;
+}
+
+.rag-status-text {
+    white-space: nowrap;
+    opacity: 0.9;
+    font-size: 11px;
+}
+
+.rag-progress-bar-bg {
+    width: 60px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.light .rag-progress-bar-bg {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.rag-progress-bar-fill {
+    height: 100%;
+    background: #a855f7;
+    transition: width 0.3s ease;
 }
 
 .status-left,
@@ -833,4 +863,62 @@ body.light .zoom-btn {
 }
 body.light .zoom-value {
   color: #fff;
+}
+
+/* ─── Problem Viewer & Markdown ──────────────────────── */
+.prose-invert h2 {
+  font-family: system-ui, -apple-system, sans-serif;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-top: 1.5rem;
+}
+
+.prose-invert p {
+  line-height: 1.7;
+  color: #cccccc;
+  margin-bottom: 1rem;
+}
+
+.prose-invert code {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e6db74;
+  padding: 0.15rem 0.35rem;
+  border-radius: 3px;
+  font-family: 'Menlo', 'Monaco', monospace;
+  font-size: 0.9em;
+}
+
+.prose-invert ul {
+  list-style-type: disc;
+  padding-left: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.prose-invert li {
+  margin-bottom: 0.35rem;
+}
+
+/* Custom Scrollbar for Viewer */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
