@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { FilePlus, FolderPlus } from 'lucide-react';
+import { FilePlus, FolderPlus, RefreshCw } from 'lucide-react';
 import { getFileIcon, FOLDER_ICON, FOLDER_OPEN_ICON } from '../utils/fileUtils';
 
 function TreeItem({ entry, depth, onFileClick, activeFile }) {
@@ -73,20 +73,24 @@ import CodeforcesExplorer from './CodeforcesExplorer';
 import CodeforcesProblemFilter from './CodeforcesProblemFilter';
 import CodeRunner from './CodeRunner';
 
-export default function Sidebar({ 
-    folderName, 
-    folderPath, 
-    entries, 
-    onOpenFolder, 
-    onFileClick, 
+export default function Sidebar({
+    folderName,
+    folderPath,
+    entries,
+    onOpenFolder,
+    onFileClick,
     onCreateFile,
     onCreateFolder,
-    activeFile, 
+    activeFile,
     activePanel,
     onCfSettingsClick,
     onOpenProblem,
     onViewProblem,
-    style 
+    style,
+    code,
+    onShowTerminal,
+    onFocusTerminal,
+    onRefresh
 }) {
     if (activePanel === 'codeforces') {
         return (
@@ -95,13 +99,13 @@ export default function Sidebar({
                     <CodeforcesExplorer onOpenSettings={onCfSettingsClick} onOpenProblem={onOpenProblem} />
                 </div>
                 <div className="flex-1 overflow-hidden border-t border-[#3c3c3c]" style={{ height: '55%' }}>
-                     <CodeforcesProblemFilter onOpenProblemFile={onViewProblem} />
+                    <CodeforcesProblemFilter onOpenProblemFile={onViewProblem} />
                 </div>
             </div>
         );
     }
     if (activePanel === 'run') {
-        return <CodeRunner activeFile={activeFile} />;
+        return <CodeRunner activeFile={activeFile} code={code} onShowTerminal={onShowTerminal} onFocusTerminal={onFocusTerminal} onRefresh={onRefresh} />;
     }
 
     return (
@@ -110,6 +114,9 @@ export default function Sidebar({
                 <span className="sidebar-title">EXPLORER</span>
                 {folderPath && (
                     <div className="flex space-x-1">
+                        <button onClick={onRefresh} title="Refresh" className="p-1 hover:bg-white/10 rounded">
+                            <RefreshCw size={14} className="opacity-70 hover:opacity-100" />
+                        </button>
                         <button onClick={onCreateFile} title="New File" className="p-1 hover:bg-white/10 rounded">
                             <FilePlus size={14} className="opacity-70 hover:opacity-100" />
                         </button>
