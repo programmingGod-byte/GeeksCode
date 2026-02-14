@@ -19,7 +19,7 @@ import { getLanguage, getLanguageLabel } from './utils/fileUtils';
 
 export default function App() {
     // ─── State ──────────────────────────────────────────
-    const [theme, setTheme] = useState('vs-dark'); 
+    const [theme, setTheme] = useState('vs-dark');
     const [activePanel, setActivePanel] = useState('explorer');
     const [folderPath, setFolderPath] = useState(null);
     const [folderName, setFolderName] = useState('');
@@ -42,7 +42,7 @@ export default function App() {
     const [showCfSettings, setShowCfSettings] = useState(false);
     const [showBrowser, setShowBrowser] = useState(false);
     const [browserUrl, setBrowserUrl] = useState('https://codeforces.com');
-    const [inputModal, setInputModal] = useState({ isOpen: false, title: '', placeholder: '', onSubmit: () => {} });
+    const [inputModal, setInputModal] = useState({ isOpen: false, title: '', placeholder: '', onSubmit: () => { } });
     const [viewingProblem, setViewingProblem] = useState(null);
 
     const [ragProgress, setRagProgress] = useState(null);
@@ -293,7 +293,7 @@ export default function App() {
         if (!activeTab) return;
         const tab = openTabs.find(t => t.filePath === activeTab);
         if (!tab) return;
-        
+
         let content = tab.content;
         if (editorRef.current) {
             content = editorRef.current.getValue();
@@ -305,7 +305,7 @@ export default function App() {
             name: `Big O: ${tab.fileName}`,
             messages: [{ role: 'ai', content: `🧠 Analyzing performance for **${tab.fileName}**...` }]
         };
-        
+
         setChatSessions(prev => {
             const existing = prev.find(s => s.id === newId);
             if (existing) {
@@ -315,7 +315,7 @@ export default function App() {
             return [...prev, newSession];
         });
         setActiveSessionId(newId);
-        
+
         setTimeout(async () => {
             const prompt = `Analyze the Time and Space complexity for the provided code. 
 Be extremely concise. 
@@ -332,17 +332,17 @@ ${content}
                 try {
                     // Initialize the AI session first (safe mode requires this)
                     await window.electronAPI.initAI(newId);
-                    
+
                     const response = await window.electronAPI.askAI(prompt, newId);
-                    setChatSessions(prev => prev.map(s => 
-                        s.id === newId 
+                    setChatSessions(prev => prev.map(s =>
+                        s.id === newId
                             ? { ...s, messages: [...s.messages, { role: 'ai', content: response }] }
                             : s
                     ));
                 } catch (e) {
                     console.error("Analysis failed", e);
-                    setChatSessions(prev => prev.map(s => 
-                        s.id === newId 
+                    setChatSessions(prev => prev.map(s =>
+                        s.id === newId
                             ? { ...s, messages: [...s.messages, { role: 'ai', content: "Error: AI not initialized or busy." }] }
                             : s
                     ));
@@ -387,7 +387,7 @@ ${content}
                     setFileEntries(entries);
                     handleIndexProject(folderPath);
                 } else {
-                     console.error("Failed to create folder");
+                    console.error("Failed to create folder");
                 }
             }
         });
@@ -489,7 +489,7 @@ ${content}
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
     }, [sidebarWidth]);
-    
+
     // ─── AI Chat Resize ───────────────────────────────
     const handleAiChatMouseDown = useCallback((e) => {
         e.preventDefault();
@@ -522,6 +522,15 @@ ${content}
     const languageLabel = currentTab ? getLanguageLabel(currentTab.language) : 'Plain Text';
     const positionText = `Ln ${cursorPos.line}, Col ${cursorPos.col}`;
 
+    // ─── Refresh File Explorer ──────────────────────────
+    const refreshFileExplorer = useCallback(async () => {
+        if (!folderPath) return;
+        const entries = await window.electronAPI.readDir(folderPath);
+        setFileEntries(entries);
+        // Also re-index project to keep RAG up to date with new files
+        handleIndexProject(folderPath);
+    }, [folderPath, handleIndexProject]);
+
     return (
         <>
             <TitleBar folderName={folderName || null} />
@@ -542,6 +551,9 @@ ${content}
                     onCreateFolder={handleCreateFolder}
                     activeFile={activeTab}
                     activePanel={activePanel}
+                    code={currentTab}
+                    onShowTerminal={() => setPanelVisible(true)}
+                    onFocusTerminal={() => terminalRef.current?.focus()}
                     onCfSettingsClick={() => setShowCfSettings(true)}
                     onOpenProblem={(url) => {
                         setBrowserUrl(url);
@@ -550,6 +562,7 @@ ${content}
                     onViewProblem={handleViewProblem}
                     style={{ width: `${sidebarWidth}px` }}
                     theme={theme}
+                    onRefresh={refreshFileExplorer}
                 />
                 <div id="sidebar-resize" onMouseDown={handleSidebarMouseDown}></div>
                 <div id="editor-panel-area">
@@ -564,13 +577,14 @@ ${content}
                             onAnalyzeComplexity={handleAnalyzeComplexity}
                             onOpenBrowser={() => setShowBrowser(true)}
                             code={currentTab}
+                            onRefresh={refreshFileExplorer}
                         />
                         <div className="flex-1 flex overflow-hidden">
                             <div className={`flex-1 flex flex-col min-w-0 ${showBrowser ? 'border-r border-[#2b2b2b]' : ''}`}>
                                 {viewingProblem ? (
-                                    <ProblemViewer 
-                                        problem={viewingProblem} 
-                                        onClose={() => setViewingProblem(null)} 
+                                    <ProblemViewer
+                                        problem={viewingProblem}
+                                        onClose={() => setViewingProblem(null)}
                                     />
                                 ) : activeTab ? (
                                     <MonacoEditor
@@ -588,36 +602,36 @@ ${content}
                             </div>
                             {showBrowser && (
                                 <div className="flex-1 min-w-0 flex flex-col">
-                                    <BrowserLayout 
-                                        initialUrl={browserUrl} 
-                                        onClose={() => setShowBrowser(false)} 
+                                    <BrowserLayout
+                                        initialUrl={browserUrl}
+                                        onClose={() => setShowBrowser(false)}
                                     />
                                 </div>
                             )}
                         </div>
                     </div>
-                <TerminalPanel
-                    visible={panelVisible}
-                    onClose={() => setPanelVisible(false)}
-                    panelHeight={panelHeight}
-                    onResize={setPanelHeight}
-                    theme={theme}
-                />
+                    <TerminalPanel
+                        visible={panelVisible}
+                        onClose={() => setPanelVisible(false)}
+                        panelHeight={panelHeight}
+                        onResize={setPanelHeight}
+                        theme={theme}
+                    />
                 </div>
                 {/* AI Chat Layout with Resizer */}
                 <div id="aichat-resize" onMouseDown={handleAiChatMouseDown}></div>
                 <div style={{ width: `${aiChatWidth}px`, borderLeft: '1px solid #2b2b2b', background: theme.includes('dark') ? '#1e1e1e' : '#fff', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-                     <AIChat 
+                    <AIChat
                         sessions={chatSessions}
                         setSessions={setChatSessions}
                         activeSessionId={activeSessionId}
                         setActiveSessionId={setActiveSessionId}
                         theme={theme}
                         projectFiles={projectFiles}
-                     />
+                    />
                 </div>
             </div>
-            <StatusBar 
+            <StatusBar
                 position={cursorPos}
                 language={languageLabel}
                 encoding="UTF-8"
@@ -629,14 +643,14 @@ ${content}
                 onResetZoom={handleResetZoom}
                 ragProgress={ragProgress}
             />
-            <QuickOpenModal 
+            <QuickOpenModal
                 isOpen={showQuickOpen}
                 onClose={() => setShowQuickOpen(false)}
                 files={projectFiles}
                 onFileSelect={handleFileClick}
             />
             {showCfSettings && (
-                <CodeforcesSettingsModal 
+                <CodeforcesSettingsModal
                     isOpen={showCfSettings}
                     onClose={() => setShowCfSettings(false)}
                     onSave={() => {
@@ -645,12 +659,12 @@ ${content}
                 />
             )}
             {showModelModal && (
-                <ModelDownloadModal 
+                <ModelDownloadModal
                     onClose={() => setShowModelModal(false)}
                     onDownloadComplete={() => setShowModelModal(false)}
                 />
             )}
-            <InputModal 
+            <InputModal
                 isOpen={inputModal.isOpen}
                 title={inputModal.title}
                 placeholder={inputModal.placeholder}

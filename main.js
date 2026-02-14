@@ -5,6 +5,7 @@ const os = require('os');
 const pty = require('node-pty');
 const axios = require('axios');
 const ragService = require('./src/utils/ragService');
+const codeModel = require('./src/utils/codeModel');
 
 let mainWindow;
 let ptyProcess = null;
@@ -25,36 +26,36 @@ const NOMIC_FILENAME = "nomic-embed-text-v1.5.Q4_K_M.gguf";
 // ... existing code ...  
 
 ipcMain.handle('ai:delete-model', async () => {
-    const deepseekPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
-    const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
-    let success = true;
-    
-    try {
-        if (fs.existsSync(deepseekPath)) {
-            fs.unlinkSync(deepseekPath);
-        }
-    } catch (e) {
-        console.error('Error deleting deepseek model:', e);
-        success = false;
-    }
+  const deepseekPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
+  const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+  let success = true;
 
-    try {
-        if (fs.existsSync(nomicPath)) {
-            fs.unlinkSync(nomicPath);
-        }
-    } catch (e) {
-        console.error('Error deleting nomic model:', e);
-        success = false;
+  try {
+    if (fs.existsSync(deepseekPath)) {
+      fs.unlinkSync(deepseekPath);
     }
+  } catch (e) {
+    console.error('Error deleting deepseek model:', e);
+    success = false;
+  }
 
-    if (success) {
-        model = null; // Reset global model reference
-        context = null; // Reset global context reference
-        sessions.clear(); // Clear all sessions
-        globalAIInitPromise = null; // Allow re-init
-        return true;
+  try {
+    if (fs.existsSync(nomicPath)) {
+      fs.unlinkSync(nomicPath);
     }
-    return false;
+  } catch (e) {
+    console.error('Error deleting nomic model:', e);
+    success = false;
+  }
+
+  if (success) {
+    model = null; // Reset global model reference
+    context = null; // Reset global context reference
+    sessions.clear(); // Clear all sessions
+    globalAIInitPromise = null; // Allow re-init
+    return true;
+  }
+  return false;
 });
 
 function createWindow() {
@@ -137,18 +138,18 @@ function createWindow() {
     { urls: ['*://*/*'] }, // Apply to all URLs
     (details, callback) => {
       const responseHeaders = Object.assign({}, details.responseHeaders);
-      
+
       const keysToRemove = [
-          'x-frame-options',
-          'content-security-policy',
-          'frame-options',
-          'x-content-type-options' // Sometimes causes issues with MIME types in iframes
+        'x-frame-options',
+        'content-security-policy',
+        'frame-options',
+        'x-content-type-options' // Sometimes causes issues with MIME types in iframes
       ];
 
       Object.keys(responseHeaders).forEach(key => {
-          if (keysToRemove.includes(key.toLowerCase())) {
-              delete responseHeaders[key];
-          }
+        if (keysToRemove.includes(key.toLowerCase())) {
+          delete responseHeaders[key];
+        }
       });
 
       callback({ cancel: false, responseHeaders });
@@ -156,90 +157,11 @@ function createWindow() {
   );
 }
 
-function ParseCode(code) {
-  const lines = code.split('\n')
-  const results = []
-
-  for (const line of lines) {
-    let i = 0
-    while (i < line.length) {
-      if (
-        line[i] === '!' &&
-        line[i + 1] === '@' &&
-        line[i + 2] === '#' &&
-        line[i + 3] === '$'
-      ) {
-        i += 4
-        if (line[i] !== '(') {
-          return 'Invalid Syntax'
-        }
-        i++
-        let temp = ''
-        while (i < line.length && line[i] !== ')') {
-          temp += line[i]
-          i++
-        }
-        if (i >= line.length) {
-          return 'Invalid Syntax'
-        }
-        results.push(temp)
-      }
-      i++
-    }
-  }
-  return results
-}
-function callAI(prompts) {
-  let res;
-  let outputs = []
-  for (let i = 0; i < prompts.length; i++) {
-    res = `vector<int> arr={1,2,3,4,5}; int sum=0; for (int i:arr) sum+=i; cout<<sum<<endl;`
-    outputs.push(res)
-  }
-  return outputs
-}
-function placeBack(code, outputs) {
-  const lines = code.split('\n')
-  let j = 0
-  const resultLines = []
-  for (const line of lines) {
-    let i = 0
-    let newLine = ''
-    while (i < line.length) {
-      if (
-        line[i] === '!' &&
-        line[i + 1] === '@' &&
-        line[i + 2] === '#' &&
-        line[i + 3] === '$'
-      ) {
-        i += 4
-        if (line[i] !== '(') {
-          return 'Invalid Syntax'
-        }
-        i++
-        while (i < line.length && line[i] !== ')') {
-          i++
-        }
-        if (i >= line.length) {
-          return 'Invalid Syntax'
-        }
-        newLine += outputs[j]
-        j++
-        i++
-      } else {
-        newLine += line[i]
-        i++
-      }
-    }
-    resultLines.push(newLine)
-  }
-  return resultLines.join('\n')
-}
-
 ipcMain.handle('submit-code', async (event, code) => {
-  let prompts = ParseCode(code)
-  let outputs = callAI(prompts)
-  let finalCppCode = placeBack(code, outputs)
+  const modelPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
+  await codeModel.init(modelPath);
+  const finalCppCode = await codeModel.query(code);
+  console.log(finalCppCode);
 
   const tmpDir = os.tmpdir()
   const cppPath = path.join(tmpDir, 'temp.cpp')
@@ -249,8 +171,8 @@ ipcMain.handle('submit-code', async (event, code) => {
     success: true,
     cppPath: cppPath
   }
-
 })
+
 
 app.whenReady().then(createWindow);
 
@@ -356,28 +278,28 @@ ipcMain.handle('fs:createFolder', async (_, folderPath) => {
 
 // ─── IPC: RAG Agent ─────────────────────────────────────────
 ipcMain.handle('rag:index', async (event, projectFiles) => {
-    // Ensure RAG service is initialized with model if possible
-    if (!ragService.modelPath) {
-        const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
-        if (fs.existsSync(nomicPath)) {
-            console.log("RAG: Auto-initializing for Project index...");
-            await ragService.init(app.getPath('userData'), nomicPath);
-        } else {
-            console.warn("RAG: Cannot index Project, model not found at", nomicPath);
-            return false;
-        }
+  // Ensure RAG service is initialized with model if possible
+  if (!ragService.modelPath) {
+    const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+    if (fs.existsSync(nomicPath)) {
+      console.log("RAG: Auto-initializing for Project index...");
+      await ragService.init(app.getPath('userData'), nomicPath);
+    } else {
+      console.warn("RAG: Cannot index Project, model not found at", nomicPath);
+      return false;
     }
+  }
 
-    await ragService.indexProject(projectFiles, (current, total, filename) => {
-        if (!event.sender.isDestroyed()) {
-            event.sender.send('rag:progress', { current, total, filename, type: 'project' });
-        }
-    });
-    return true;
+  await ragService.indexProject(projectFiles, (current, total, filename) => {
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('rag:progress', { current, total, filename, type: 'project' });
+    }
+  });
+  return true;
 });
 
 ipcMain.handle('rag:query', async (_, query) => {
-    return ragService.query(query);
+  return ragService.query(query);
 });
 
 // ... (fs:indexProject existing code) ...
@@ -385,29 +307,29 @@ ipcMain.handle('rag:query', async (_, query) => {
 // ... (existing code) ...
 
 ipcMain.handle('rag:index-kb', async (event) => {
-    const kbPath = path.join(__dirname, 'src', 'cp_dsa_knowledge_base');
+  const kbPath = path.join(__dirname, 'src', 'cp_dsa_knowledge_base');
 
-    // Ensure RAG service is initialized with model if possible
-    if (!ragService.modelPath) {
-        const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
-        if (fs.existsSync(nomicPath)) {
-             console.log("RAG: Auto-initializing for KB index...");
-             await ragService.init(app.getPath('userData'), nomicPath);
-        } else {
-             console.warn("RAG: Cannot index KB, model not found at", nomicPath);
-             return false;
-        }
+  // Ensure RAG service is initialized with model if possible
+  if (!ragService.modelPath) {
+    const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+    if (fs.existsSync(nomicPath)) {
+      console.log("RAG: Auto-initializing for KB index...");
+      await ragService.init(app.getPath('userData'), nomicPath);
+    } else {
+      console.warn("RAG: Cannot index KB, model not found at", nomicPath);
+      return false;
     }
+  }
 
-    if (fs.existsSync(kbPath)) {
-        await ragService.indexDirectory(kbPath, (current, total, filename) => {
-            if (!event.sender.isDestroyed()) {
-                event.sender.send('rag:progress', { current, total, filename, type: 'kb' });
-            }
-        });
-        return true;
-    }
-    return false;
+  if (fs.existsSync(kbPath)) {
+    await ragService.indexDirectory(kbPath, (current, total, filename) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('rag:progress', { current, total, filename, type: 'kb' });
+      }
+    });
+    return true;
+  }
+  return false;
 });
 
 ipcMain.handle('fs:indexProject', async (_, rootPath) => {
@@ -437,7 +359,7 @@ ipcMain.handle('fs:indexProject', async (_, rootPath) => {
       console.warn(`Error walking dir ${dir}:`, e);
     }
   };
-  
+
   try {
     if (!rootPath || !fs.existsSync(rootPath)) return [];
     walk(rootPath);
@@ -449,17 +371,17 @@ ipcMain.handle('fs:indexProject', async (_, rootPath) => {
 });
 
 ipcMain.handle('shell:run', async (_, command, cwd) => {
-    return new Promise((resolve) => {
-        const { exec } = require('child_process');
-        exec(command, { cwd: cwd || os.homedir() }, (error, stdout, stderr) => {
-            resolve({
-                success: !error,
-                stdout: stdout,
-                stderr: stderr,
-                exitCode: error ? error.code : 0
-            });
-        });
+  return new Promise((resolve) => {
+    const { exec } = require('child_process');
+    exec(command, { cwd: cwd || os.homedir() }, (error, stdout, stderr) => {
+      resolve({
+        success: !error,
+        stdout: stdout,
+        stderr: stderr,
+        exitCode: error ? error.code : 0
+      });
     });
+  });
 });
 
 // ─── IPC: Terminal (node-pty) ───────────────────────────────
@@ -529,55 +451,55 @@ async function downloadModel(event, url, filename, expectedSize = null, displayN
   const savePath = path.join(app.getPath('userData'), filename);
 
   if (fs.existsSync(savePath)) {
-      const stats = fs.statSync(savePath);
-      if (!expectedSize || stats.size === expectedSize) {
-          console.log(`${displayName} already exists and size matches (or no size check).`);
-          return savePath;
-      }
-      console.warn(`${displayName} size mismatch: found ${stats.size}, expected ${expectedSize}. Re-downloading...`);
-      fs.unlinkSync(savePath); // remove corrupted file
+    const stats = fs.statSync(savePath);
+    if (!expectedSize || stats.size === expectedSize) {
+      console.log(`${displayName} already exists and size matches (or no size check).`);
+      return savePath;
+    }
+    console.warn(`${displayName} size mismatch: found ${stats.size}, expected ${expectedSize}. Re-downloading...`);
+    fs.unlinkSync(savePath); // remove corrupted file
   }
 
   try {
-      const response = await axios({ 
-          url: url, 
-          method: 'GET', 
-          responseType: 'stream' 
+    const response = await axios({
+      url: url,
+      method: 'GET',
+      responseType: 'stream'
+    });
+
+    const totalSize = parseInt(response.headers['content-length'], 10) || expectedSize;
+    let downloaded = 0;
+
+    return new Promise((resolve, reject) => {
+      const writer = fs.createWriteStream(savePath);
+      response.data.on('data', (chunk) => {
+        downloaded += chunk.length;
+        if (event && !event.sender.isDestroyed()) {
+          const progress = totalSize ? ((downloaded / totalSize) * 100).toFixed(2) : 0;
+          event.sender.send('ai:download-progress', progress, `Downloading ${displayName}...`);
+        }
       });
-      
-      const totalSize = parseInt(response.headers['content-length'], 10) || expectedSize;
-      let downloaded = 0;
 
-      return new Promise((resolve, reject) => {
-        const writer = fs.createWriteStream(savePath);
-        response.data.on('data', (chunk) => {
-            downloaded += chunk.length;
-            if (event && !event.sender.isDestroyed()) {
-                const progress = totalSize ? ((downloaded / totalSize) * 100).toFixed(2) : 0;
-                event.sender.send('ai:download-progress', progress, `Downloading ${displayName}...`);
-            }
-        });
+      response.data.pipe(writer);
 
-        response.data.pipe(writer);
-
-        writer.on('finish', () => {
-             // Second verification after download
-             const stats = fs.statSync(savePath);
-             if (totalSize && stats.size !== totalSize) {
-                 fs.unlink(savePath, () => {});
-                 reject(new Error(`Download incomplete for ${displayName}: expected ${totalSize} bytes, got ${stats.size} bytes`));
-             } else {
-                 resolve(savePath);
-             }
-        });
-        writer.on('error', (err) => {
-            fs.unlink(savePath, () => {}); // cleanup partial file
-            reject(err);
-        });
+      writer.on('finish', () => {
+        // Second verification after download
+        const stats = fs.statSync(savePath);
+        if (totalSize && stats.size !== totalSize) {
+          fs.unlink(savePath, () => { });
+          reject(new Error(`Download incomplete for ${displayName}: expected ${totalSize} bytes, got ${stats.size} bytes`));
+        } else {
+          resolve(savePath);
+        }
       });
+      writer.on('error', (err) => {
+        fs.unlink(savePath, () => { }); // cleanup partial file
+        reject(err);
+      });
+    });
   } catch (error) {
-      console.error(`Download failed for ${displayName}:`, error);
-      throw error;
+    console.error(`Download failed for ${displayName}:`, error);
+    throw error;
   }
 }
 
@@ -590,70 +512,70 @@ async function initDeepSeek(modelPath, sessionId = 'default') {
   try {
     // Global lock for AI resources (model, context)
     if (!globalAIInitPromise) {
-        globalAIInitPromise = (async () => {
-             const { getLlama } = await import("node-llama-cpp");
-             console.log("AI: Initializing Llama backend...");
-             
-             // Conservative initialization: CPU-only to avoid SIGILL/CUDA issues
-             let currentLlama = await getLlama({ gpu: false });
-             llama = currentLlama;
-             
-             console.log("AI: Backend initialized. Loading model...");
-             if (!model) {
-                 try {
-                     model = await llama.loadModel({ 
-                         modelPath,
-                         // gpuLayers: 0
-                     });
-                     console.log("AI: Model loaded successfully.");
-                 } catch (loadErr) {
-                     console.error("AI: Critical error during model load:", loadErr);
-                     throw loadErr;
-                 }
-             }
-             
-             if (!context) {
-                 console.log("AI: Creating context...");
-                 context = await model.createContext({
-                     contextSize: 2048,
-                     sequences: 2 // Allow Chat + Complexity sessions
-                 });
-                 console.log("AI: Context created.");
-             }
-             return { model, context };
-        })();
+      globalAIInitPromise = (async () => {
+        const { getLlama } = await import("node-llama-cpp");
+        console.log("AI: Initializing Llama backend...");
+
+        // Conservative initialization: CPU-only to avoid SIGILL/CUDA issues
+        let currentLlama = await getLlama({ gpu: false });
+        llama = currentLlama;
+
+        console.log("AI: Backend initialized. Loading model...");
+        if (!model) {
+          try {
+            model = await llama.loadModel({
+              modelPath,
+              // gpuLayers: 0
+            });
+            console.log("AI: Model loaded successfully.");
+          } catch (loadErr) {
+            console.error("AI: Critical error during model load:", loadErr);
+            throw loadErr;
+          }
+        }
+
+        if (!context) {
+          console.log("AI: Creating context...");
+          context = await model.createContext({
+            contextSize: 2048,
+            sequences: 2 // Allow Chat + Complexity sessions
+          });
+          console.log("AI: Context created.");
+        }
+        return { model, context };
+      })();
     }
 
     const { context: aiContext } = await globalAIInitPromise;
 
     if (aiContext.sequencesLeft === 0) {
-        console.warn("No sequences left. Recycling the oldest session...");
-        // Find the oldest session (first key in Map) to recycle
-        const iterator = sessions.keys();
-        const oldestSessionId = iterator.next().value;
-        if (oldestSessionId) {
-            const oldSessionData = sessions.get(oldestSessionId);
-            if (oldSessionData && oldSessionData.sequence) {
-                try {
-                    if (!oldSessionData.sequence.disposed) {
-                        oldSessionData.sequence.dispose();
-                        console.log(`Recycled session: ${oldestSessionId}`);
-                    }
-                } catch (e) {
-                    console.warn(`Error disposing session ${oldestSessionId}:`, e);
-                }
+      console.warn("No sequences left. Recycling the oldest session...");
+      // Find the oldest session (first key in Map) to recycle
+      const iterator = sessions.keys();
+      const oldestSessionId = iterator.next().value;
+      if (oldestSessionId) {
+        const oldSessionData = sessions.get(oldestSessionId);
+        if (oldSessionData && oldSessionData.sequence) {
+          try {
+            if (!oldSessionData.sequence.disposed) {
+              oldSessionData.sequence.dispose();
+              console.log(`Recycled session: ${oldestSessionId}`);
             }
-            sessions.delete(oldestSessionId);
+          } catch (e) {
+            console.warn(`Error disposing session ${oldestSessionId}:`, e);
+          }
         }
+        sessions.delete(oldestSessionId);
+      }
     }
 
     const { LlamaChatSession } = await import("node-llama-cpp");
     const sequence = aiContext.getSequence();
-    const chatSession = new LlamaChatSession({ 
+    const chatSession = new LlamaChatSession({
       contextSequence: sequence,
       systemPrompt: "You are a helpful coding assistant. When asked for code, always provide implementation in C++ unless another language is explicitly requested."
     });
-    
+
     sessions.set(sessionId, { session: chatSession, sequence });
     console.log(`AI Session initialized: ${sessionId}`);
     return true;
@@ -666,170 +588,170 @@ async function initDeepSeek(modelPath, sessionId = 'default') {
 
 // IPC Handlers
 ipcMain.handle('ai:init', async (event, sessionId = 'default') => {
-    try {
-        // Download DeepSeek
-        const modelPath = await downloadModel(event, deepSeekModelUrl, 'deepseek-1.3b.gguf', EXPECTED_MODEL_SIZE, "DeepSeek Coder");
-        
-        // Download Nomic
-        const nomicPath = await downloadModel(event, NOMIC_MODEL_URL, NOMIC_FILENAME, null, "Nomic Embed");
+  try {
+    // Download DeepSeek
+    const modelPath = await downloadModel(event, deepSeekModelUrl, 'deepseek-1.3b.gguf', EXPECTED_MODEL_SIZE, "DeepSeek Coder");
 
-        // Initialize RAG Service
-        await ragService.init(app.getPath('userData'), nomicPath);
+    // Download Nomic
+    const nomicPath = await downloadModel(event, NOMIC_MODEL_URL, NOMIC_FILENAME, null, "Nomic Embed");
 
-        await initDeepSeek(modelPath, sessionId);
+    // Initialize RAG Service
+    await ragService.init(app.getPath('userData'), nomicPath);
 
-        /*
-        // Auto-index Knowledge Base if not already done
-        const kbPath = path.join(__dirname, 'src', 'cp_dsa_knowledge_base');
-        if (fs.existsSync(kbPath)) {
-            console.log("RAG: Auto-indexing KB after initial download...");
-            // Use the optimized indexDirectory which skips already indexed files
-            await ragService.indexDirectory(kbPath, (current, total, filename) => {
-                if (!event.sender.isDestroyed()) {
-                    event.sender.send('rag:progress', { current, total, filename, type: 'kb' });
-                }
-            });
-        }
-        */
+    await initDeepSeek(modelPath, sessionId);
 
-        return { success: true };
-    } catch (error) {
-        return { success: false, error: error.message };
+    /*
+    // Auto-index Knowledge Base if not already done
+    const kbPath = path.join(__dirname, 'src', 'cp_dsa_knowledge_base');
+    if (fs.existsSync(kbPath)) {
+        console.log("RAG: Auto-indexing KB after initial download...");
+        // Use the optimized indexDirectory which skips already indexed files
+        await ragService.indexDirectory(kbPath, (current, total, filename) => {
+            if (!event.sender.isDestroyed()) {
+                event.sender.send('rag:progress', { current, total, filename, type: 'kb' });
+            }
+        });
     }
+    */
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 });
 
 
 
 ipcMain.handle('ai:check-model', () => {
-    const deepseekPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
-    const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
-    
-    // Check DeepSeek
-    if (!fs.existsSync(deepseekPath)) return false;
-    const stats = fs.statSync(deepseekPath);
-    if (stats.size !== EXPECTED_MODEL_SIZE) return false;
-    
-    // Check Nomic (optional size check if we knew it, for now just existence)
-    if (!fs.existsSync(nomicPath)) return false;
-    
-    return true;
+  const deepseekPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
+  const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+
+  // Check DeepSeek
+  if (!fs.existsSync(deepseekPath)) return false;
+  const stats = fs.statSync(deepseekPath);
+  if (stats.size !== EXPECTED_MODEL_SIZE) return false;
+
+  // Check Nomic (optional size check if we knew it, for now just existence)
+  if (!fs.existsSync(nomicPath)) return false;
+
+  return true;
 });
 
 ipcMain.handle('ai:ask', async (event, userPrompt, sessionId = 'default') => {
   let sessionData = sessions.get(sessionId);
-  
+
   // Auto-initialize if session is missing (e.g., recycled)
   if (!sessionData) {
-      console.log(`AI: Session "${sessionId}" not found (likely recycled). Re-initializing...`);
-      await initDeepSeek(path.join(app.getPath('userData'), 'deepseek-1.3b.gguf'), sessionId);
-      sessionData = sessions.get(sessionId);
+    console.log(`AI: Session "${sessionId}" not found (likely recycled). Re-initializing...`);
+    await initDeepSeek(path.join(app.getPath('userData'), 'deepseek-1.3b.gguf'), sessionId);
+    sessionData = sessions.get(sessionId);
   }
 
   if (!sessionData) {
-      console.warn(`AI Ask failed: Session ${sessionId} still not initialized`);
-      return "AI is not initialized. Please wait.";
+    console.warn(`AI Ask failed: Session ${sessionId} still not initialized`);
+    return "AI is not initialized. Please wait.";
   }
   const { session } = sessionData;
   try {
-      let augmentedPrompt = userPrompt;
+    let augmentedPrompt = userPrompt;
 
-      // Only perform RAG retrieval for general chat, skip for specialized tasks like complexity analysis
-      // We also check if the prompt looks like it's asking for personal/config stuff that shouldn't search docs
-      // skip RAG for very short messages or greetings
-      const isGreeting = /^(hi|hello|hey|hola|yo|hello there)/i.test(userPrompt.trim());
-      const tooShort = userPrompt.trim().length < 10;
-      const skipRAG = sessionId === 'complexity-session' || sessionId.startsWith('system-') || isGreeting || tooShort;
-      
-      if (!skipRAG) {
-          console.log(`AI: [Session ${sessionId}] Retrieving RAG context...`);
-          // Strictly request only 3 chunks
-          const contextItems = await ragService.query(userPrompt, 3).catch(e => {
-              console.warn("RAG: Query failed, skipping context", e);
-              return [];
-          });
-          
-          if (contextItems.length > 0) {
-              const contextString = contextItems.map(item => `[Source: ${item.source}]\n${item.text}`).join("\n\n");
-              // Final safety truncation of context string
-              const truncatedContext = contextString.substring(0, 4000); 
-              augmentedPrompt = `Relevant Context:\n---------------------\n${truncatedContext}\n---------------------\nInstruction: Use the context above if relevant, otherwise use your general knowledge. Respond to: ${userPrompt}`;
-              console.log(`AI: [Session ${sessionId}] Augmented prompt with ${contextItems.length} chunks.`);
-          }
-      } else {
-          console.log(`AI: [Session ${sessionId}] Skipping RAG augmentation (Session: ${sessionId}, Greeting/Short: ${isGreeting||tooShort}).`);
+    // Only perform RAG retrieval for general chat, skip for specialized tasks like complexity analysis
+    // We also check if the prompt looks like it's asking for personal/config stuff that shouldn't search docs
+    // skip RAG for very short messages or greetings
+    const isGreeting = /^(hi|hello|hey|hola|yo|hello there)/i.test(userPrompt.trim());
+    const tooShort = userPrompt.trim().length < 10;
+    const skipRAG = sessionId === 'complexity-session' || sessionId.startsWith('system-') || isGreeting || tooShort;
+
+    if (!skipRAG) {
+      console.log(`AI: [Session ${sessionId}] Retrieving RAG context...`);
+      // Strictly request only 3 chunks
+      const contextItems = await ragService.query(userPrompt, 3).catch(e => {
+        console.warn("RAG: Query failed, skipping context", e);
+        return [];
+      });
+
+      if (contextItems.length > 0) {
+        const contextString = contextItems.map(item => `[Source: ${item.source}]\n${item.text}`).join("\n\n");
+        // Final safety truncation of context string
+        const truncatedContext = contextString.substring(0, 4000);
+        augmentedPrompt = `Relevant Context:\n---------------------\n${truncatedContext}\n---------------------\nInstruction: Use the context above if relevant, otherwise use your general knowledge. Respond to: ${userPrompt}`;
+        console.log(`AI: [Session ${sessionId}] Augmented prompt with ${contextItems.length} chunks.`);
       }
+    } else {
+      console.log(`AI: [Session ${sessionId}] Skipping RAG augmentation (Session: ${sessionId}, Greeting/Short: ${isGreeting || tooShort}).`);
+    }
 
-      console.log(`AI: [Session ${sessionId}] Sending prompt to model...`);
-      const response = await session.prompt(augmentedPrompt);
-      console.log(`AI: [Session ${sessionId}] Response received.`);
-      return response || "(Empty response from AI)";
+    console.log(`AI: [Session ${sessionId}] Sending prompt to model...`);
+    const response = await session.prompt(augmentedPrompt);
+    console.log(`AI: [Session ${sessionId}] Response received.`);
+    return response || "(Empty response from AI)";
   } catch (error) {
-      console.error(`AI: [Session ${sessionId}] Prompt failed:`, error);
-      return `Error: ${error.message}`;
+    console.error(`AI: [Session ${sessionId}] Prompt failed:`, error);
+    return `Error: ${error.message}`;
   }
 });
 
 ipcMain.handle('ai:destroy-session', async (event, sessionId) => {
-    if (sessions.has(sessionId)) {
-        const sessionData = sessions.get(sessionId);
-        // Dispose context sequence if available
-        if (sessionData.sequence) {
-            try {
-                if (!sessionData.sequence.disposed) {
-                    sessionData.sequence.dispose();
-                }
-            } catch (e) {
-                console.warn(`Error disposing session ${sessionId}:`, e);
-            }
+  if (sessions.has(sessionId)) {
+    const sessionData = sessions.get(sessionId);
+    // Dispose context sequence if available
+    if (sessionData.sequence) {
+      try {
+        if (!sessionData.sequence.disposed) {
+          sessionData.sequence.dispose();
         }
-        sessions.delete(sessionId);
-        console.log(`AI Session destroyed: ${sessionId}`);
-        return true;
+      } catch (e) {
+        console.warn(`Error disposing session ${sessionId}:`, e);
+      }
     }
-    return false;
+    sessions.delete(sessionId);
+    console.log(`AI Session destroyed: ${sessionId}`);
+    return true;
+  }
+  return false;
 });
 
 // ─── Codeforces credentials ──────────────────────────────
 const CF_CONFIG_PATH = path.join(app.getPath('userData'), 'cf_config.json');
 
 ipcMain.handle('codeforces:save-creds', async (_, creds) => {
-    try {
-        fs.writeFileSync(CF_CONFIG_PATH, JSON.stringify(creds), 'utf-8');
-        return true;
-    } catch (e) {
-        console.error('Error saving CF creds:', e);
-        return false;
-    }
+  try {
+    fs.writeFileSync(CF_CONFIG_PATH, JSON.stringify(creds), 'utf-8');
+    return true;
+  } catch (e) {
+    console.error('Error saving CF creds:', e);
+    return false;
+  }
 });
 
 ipcMain.handle('codeforces:get-submissions', async (_, handle) => {
-    try {
-        const response = await axios.get(`https://codeforces.com/api/user.status?handle=${handle}&from=1&count=20`, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
-        });
-        return response.data;
-    } catch (error) {
-        console.error('Codeforces submissions Error:', error.message);
-        if (error.response) {
-            return { status: 'FAILED', comment: error.response.data.comment || `HTTP ${error.response.status}` };
-        }
-        return { status: 'FAILED', comment: error.message };
+  try {
+    const response = await axios.get(`https://codeforces.com/api/user.status?handle=${handle}&from=1&count=20`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Codeforces submissions Error:', error.message);
+    if (error.response) {
+      return { status: 'FAILED', comment: error.response.data.comment || `HTTP ${error.response.status}` };
     }
+    return { status: 'FAILED', comment: error.message };
+  }
 });
 
 ipcMain.handle('codeforces:get-user-info', async (_, handle) => {
-    try {
-        const response = await axios.get(`https://codeforces.com/api/user.info?handles=${handle}`, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
-        });
-        return response.data;
-    } catch (error) {
-        console.error('Codeforces user.info Error:', error.message);
-        if (error.response) {
-            return { status: 'FAILED', comment: error.response.data.comment || `HTTP ${error.response.status}` };
-        }
-        return { status: 'FAILED', comment: error.message };
+  try {
+    const response = await axios.get(`https://codeforces.com/api/user.info?handles=${handle}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Codeforces user.info Error:', error.message);
+    if (error.response) {
+      return { status: 'FAILED', comment: error.response.data.comment || `HTTP ${error.response.status}` };
     }
+    return { status: 'FAILED', comment: error.message };
+  }
 });
 
 ipcMain.handle('codeforces:get-creds', async () => {
@@ -844,132 +766,132 @@ ipcMain.handle('codeforces:get-creds', async () => {
 const DATASET_PATH = path.join(__dirname, 'src', 'codeforces_dataset');
 
 ipcMain.handle('codeforces:get-dataset-metadata', async () => {
-    try {
-        if (!fs.existsSync(DATASET_PATH)) return { topics: [], ratings: [], tags: [] };
+  try {
+    if (!fs.existsSync(DATASET_PATH)) return { topics: [], ratings: [], tags: [] };
 
-        const topics = fs.readdirSync(DATASET_PATH).filter(f => fs.statSync(path.join(DATASET_PATH, f)).isDirectory());
-        const ratingsSet = new Set();
-        const tagsSet = new Set();
+    const topics = fs.readdirSync(DATASET_PATH).filter(f => fs.statSync(path.join(DATASET_PATH, f)).isDirectory());
+    const ratingsSet = new Set();
+    const tagsSet = new Set();
 
-        for (const topic of topics) {
-            const topicPath = path.join(DATASET_PATH, topic);
-            const ratings = fs.readdirSync(topicPath).filter(f => fs.statSync(path.join(topicPath, f)).isDirectory());
-            ratings.forEach(r => ratingsSet.add(r));
+    for (const topic of topics) {
+      const topicPath = path.join(DATASET_PATH, topic);
+      const ratings = fs.readdirSync(topicPath).filter(f => fs.statSync(path.join(topicPath, f)).isDirectory());
+      ratings.forEach(r => ratingsSet.add(r));
 
-            for (const rating of ratings) {
-                const ratingPath = path.join(topicPath, rating);
-                const files = fs.readdirSync(ratingPath).filter(f => f.endsWith('.json'));
-                
-                // Sample some files to get tags (scanning all might be slow, but let's try for now if dataset is medium)
-                for (const file of files) {
-                    try {
-                        const content = JSON.parse(fs.readFileSync(path.join(ratingPath, file), 'utf-8'));
-                        if (content.tags) content.tags.forEach(t => tagsSet.add(t));
-                    } catch (e) { /* ignore corrupt files */ }
-                }
-            }
+      for (const rating of ratings) {
+        const ratingPath = path.join(topicPath, rating);
+        const files = fs.readdirSync(ratingPath).filter(f => f.endsWith('.json'));
+
+        // Sample some files to get tags (scanning all might be slow, but let's try for now if dataset is medium)
+        for (const file of files) {
+          try {
+            const content = JSON.parse(fs.readFileSync(path.join(ratingPath, file), 'utf-8'));
+            if (content.tags) content.tags.forEach(t => tagsSet.add(t));
+          } catch (e) { /* ignore corrupt files */ }
         }
-
-        return {
-            topics: topics.sort(),
-            ratings: Array.from(ratingsSet).sort((a, b) => parseInt(a) - parseInt(b)),
-            tags: Array.from(tagsSet).sort()
-        };
-    } catch (e) {
-        console.error('Error getting CF dataset metadata:', e);
-        return { topics: [], ratings: [], tags: [] };
+      }
     }
+
+    return {
+      topics: topics.sort(),
+      ratings: Array.from(ratingsSet).sort((a, b) => parseInt(a) - parseInt(b)),
+      tags: Array.from(tagsSet).sort()
+    };
+  } catch (e) {
+    console.error('Error getting CF dataset metadata:', e);
+    return { topics: [], ratings: [], tags: [] };
+  }
 });
 
 ipcMain.handle('codeforces:get-filtered-problems', async (_, filters) => {
-    const { topic, rating, tag, search } = filters;
-    const problems = [];
-    
-    try {
-        if (!fs.existsSync(DATASET_PATH)) return [];
+  const { topic, rating, tag, search } = filters;
+  const problems = [];
 
-        const scanTopics = topic ? [topic] : fs.readdirSync(DATASET_PATH).filter(f => fs.statSync(path.join(DATASET_PATH, f)).isDirectory());
+  try {
+    if (!fs.existsSync(DATASET_PATH)) return [];
 
-        for (const t of scanTopics) {
-            const topicPath = path.join(DATASET_PATH, t);
-            const scanRatings = rating ? [rating] : fs.readdirSync(topicPath).filter(f => fs.statSync(path.join(topicPath, f)).isDirectory());
+    const scanTopics = topic ? [topic] : fs.readdirSync(DATASET_PATH).filter(f => fs.statSync(path.join(DATASET_PATH, f)).isDirectory());
 
-            for (const r of scanRatings) {
-                const ratingPath = path.join(topicPath, r);
-                if (!fs.existsSync(ratingPath)) continue;
+    for (const t of scanTopics) {
+      const topicPath = path.join(DATASET_PATH, t);
+      const scanRatings = rating ? [rating] : fs.readdirSync(topicPath).filter(f => fs.statSync(path.join(topicPath, f)).isDirectory());
 
-                const files = fs.readdirSync(ratingPath).filter(f => f.endsWith('.json'));
-                for (const file of files) {
-                    try {
-                        const filePath = path.join(ratingPath, file);
-                        const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-                        
-                        // Apply filters
-                        if (tag && (!content.tags || !content.tags.includes(tag))) continue;
-                        if (search && !content.title.toLowerCase().includes(search.toLowerCase())) continue;
+      for (const r of scanRatings) {
+        const ratingPath = path.join(topicPath, r);
+        if (!fs.existsSync(ratingPath)) continue;
 
-                        problems.push({
-                            title: content.title,
-                            contestId: content.contestId,
-                            index: content.index,
-                            rating: content.rating,
-                            tags: content.tags,
-                            path: filePath,
-                            topic: t
-                        });
-                    } catch (e) { /* ignore */ }
-                }
-            }
+        const files = fs.readdirSync(ratingPath).filter(f => f.endsWith('.json'));
+        for (const file of files) {
+          try {
+            const filePath = path.join(ratingPath, file);
+            const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+
+            // Apply filters
+            if (tag && (!content.tags || !content.tags.includes(tag))) continue;
+            if (search && !content.title.toLowerCase().includes(search.toLowerCase())) continue;
+
+            problems.push({
+              title: content.title,
+              contestId: content.contestId,
+              index: content.index,
+              rating: content.rating,
+              tags: content.tags,
+              path: filePath,
+              topic: t
+            });
+          } catch (e) { /* ignore */ }
         }
-        return problems;
-    } catch (e) {
-        console.error('Error filtering problems:', e);
-        return [];
+      }
     }
+    return problems;
+  } catch (e) {
+    console.error('Error filtering problems:', e);
+    return [];
+  }
 });
 
 // ─── IPC: Editor State ────────────────────────────────────────
 ipcMain.handle('editor:save-state', async (_, state) => {
-    const statePath = path.join(os.homedir(), '.geeks_editor_state.json');
-    fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
-    return true;
+  const statePath = path.join(os.homedir(), '.geeks_editor_state.json');
+  fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+  return true;
 });
 
 ipcMain.handle('editor:get-state', async () => {
-    const statePath = path.join(os.homedir(), '.geeks_editor_state.json');
-    if (fs.existsSync(statePath)) {
-        try {
-            return JSON.parse(fs.readFileSync(statePath, 'utf8'));
-        } catch (e) {
-            return null;
-        }
+  const statePath = path.join(os.homedir(), '.geeks_editor_state.json');
+  if (fs.existsSync(statePath)) {
+    try {
+      return JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    } catch (e) {
+      return null;
     }
-    return null;
+  }
+  return null;
 });
 
 // Autocomplete handler
 ipcMain.handle('ai:complete', async (event, codeContext) => {
-    if (!context) return null;
-    try {
-        const { LlamaChatSession } = await import("node-llama-cpp");
-        // For autocomplete, we try to get a sequence. If context is full, this might fail unless we recycle.
-        // But autocomplete is ephemeral.
-        const tempSession = new LlamaChatSession({ 
-            contextSequence: context.getSequence() 
-        });
+  if (!context) return null;
+  try {
+    const { LlamaChatSession } = await import("node-llama-cpp");
+    // For autocomplete, we try to get a sequence. If context is full, this might fail unless we recycle.
+    // But autocomplete is ephemeral.
+    const tempSession = new LlamaChatSession({
+      contextSequence: context.getSequence()
+    });
 
-        const [prefix, suffix] = codeContext.split('<CURSOR>');
-        const prompt = `<｜fim_begin｜>${prefix}<｜fim_hole｜>${suffix}<｜fim_end｜>`;
-        
-        const response = await tempSession.prompt(prompt, {
-            maxTokens: 50,
-            temperature: 0.1,
-            stopOnTokens: ["\n", "}", ";", "<｜fim_end｜>"] 
-        });
-        
-        return response.trim();
-    } catch (error) {
-        console.error("AI Autocomplete failed:", error);
-        return null;
-    }
+    const [prefix, suffix] = codeContext.split('<CURSOR>');
+    const prompt = `<｜fim_begin｜>${prefix}<｜fim_hole｜>${suffix}<｜fim_end｜>`;
+
+    const response = await tempSession.prompt(prompt, {
+      maxTokens: 50,
+      temperature: 0.1,
+      stopOnTokens: ["\n", "}", ";", "<｜fim_end｜>"]
+    });
+
+    return response.trim();
+  } catch (error) {
+    console.error("AI Autocomplete failed:", error);
+    return null;
+  }
 });
