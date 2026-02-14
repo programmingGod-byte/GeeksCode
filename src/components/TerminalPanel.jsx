@@ -35,9 +35,8 @@ export default function TerminalPanel({ visible, onClose, panelHeight, onResize,
         };
     };
 
-    // Initialize terminal once when visible
     useEffect(() => {
-        if (!visible || initializedRef.current || !containerRef.current) return;
+        if (!visible || !containerRef.current) return;
 
         const term = new Terminal({
             fontFamily: "'Menlo', 'Monaco', 'Courier New', monospace",

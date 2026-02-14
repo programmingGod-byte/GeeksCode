@@ -40,7 +40,7 @@ class RagService {
                     tokens 
                 });
                 count++;
-            } catch (e) {
+            }catch (e) {
                 console.warn(`RAG: Failed to index ${file.path}`, e);
             }
         }

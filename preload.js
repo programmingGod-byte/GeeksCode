@@ -58,3 +58,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     destroySession: (sessionId) => ipcRenderer.invoke('ai:destroy-session', sessionId),
     deleteModel: () => ipcRenderer.invoke('ai:delete-model'),
 });
+contextBridge.exposeInMainWorld('run', {
+    submit: (a) => ipcRenderer.invoke('submit-code', a)
+})

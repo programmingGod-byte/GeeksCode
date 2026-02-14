@@ -21,31 +21,6 @@ const icons = [
         ),
     },
     {
-        id: 'git',
-        title: 'Source Control',
-        svg: (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <circle cx="12" cy="6" r="2.5" />
-                <circle cx="12" cy="18" r="2.5" />
-                <circle cx="18" cy="12" r="2.5" />
-                <path d="M12 8.5V15.5" />
-                <path d="M14.5 12H15.5" />
-            </svg>
-        ),
-    },
-    {
-        id: 'extensions',
-        title: 'Extensions',
-        svg: (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="3" y="3" width="8" height="8" rx="1" />
-                <rect x="13" y="3" width="8" height="8" rx="1" />
-                <rect x="3" y="13" width="8" height="8" rx="1" />
-                <rect x="13" y="13" width="8" height="8" rx="1" />
-            </svg>
-        ),
-    },
-    {
         id: 'run',
         title: 'Run and Debug',
         svg: (

@@ -151,6 +151,102 @@ function createWindow() {
   );
 }
 
+function ParseCode(code) {
+  const lines = code.split('\n')
+  const results = []
+
+  for (const line of lines) {
+    let i = 0
+    while (i < line.length) {
+      if (
+        line[i] === '!' &&
+        line[i + 1] === '@' &&
+        line[i + 2] === '#' &&
+        line[i + 3] === '$'
+      ) {
+        i += 4
+        if (line[i] !== '(') {
+          return 'Invalid Syntax'
+        }
+        i++
+        let temp = ''
+        while (i < line.length && line[i] !== ')') {
+          temp += line[i]
+          i++
+        }
+        if (i >= line.length) {
+          return 'Invalid Syntax'
+        }
+        results.push(temp)
+      }
+      i++
+    }
+  }
+  return results
+}
+function callAI(prompts) {
+  let res;
+  let outputs = []
+  for (let i = 0; i < prompts.length; i++) {
+    res = `vector<int> arr={1,2,3,4,5}; int sum=0; for (int i:arr) sum+=i; cout<<sum<<endl;`
+    outputs.push(res)
+  }
+  return outputs
+}
+function placeBack(code, outputs) {
+  const lines = code.split('\n')
+  let j = 0
+  const resultLines = []
+  for (const line of lines) {
+    let i = 0
+    let newLine = ''
+    while (i < line.length) {
+      if (
+        line[i] === '!' &&
+        line[i + 1] === '@' &&
+        line[i + 2] === '#' &&
+        line[i + 3] === '$'
+      ) {
+        i += 4
+        if (line[i] !== '(') {
+          return 'Invalid Syntax'
+        }
+        i++
+        while (i < line.length && line[i] !== ')') {
+          i++
+        }
+        if (i >= line.length) {
+          return 'Invalid Syntax'
+        }
+        newLine += outputs[j]
+        j++
+        i++
+      } else {
+        newLine += line[i]
+        i++
+      }
+    }
+    resultLines.push(newLine)
+  }
+  return resultLines.join('\n')
+}
+
+ipcMain.handle('submit-code', async (event, code) => {
+  let prompts = ParseCode(code)
+  let outputs = callAI(prompts)
+  let finalCppCode = placeBack(code, outputs)
+
+  const tmpDir = os.tmpdir()
+  const cppPath = path.join(tmpDir, 'temp.cpp')
+  fs.writeFileSync(cppPath, finalCppCode)
+
+  return {
+    success: true,
+    cppPath: cppPath
+  }
+
+})
+
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {

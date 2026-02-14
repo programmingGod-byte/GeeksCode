@@ -44,6 +44,7 @@ export default function App() {
     const [inputModal, setInputModal] = useState({ isOpen: false, title: '', placeholder: '', onSubmit: () => {} });
 
     const editorRef = useRef(null);
+    const terminalRef = useRef(null);
 
     const handleIndexProject = useCallback(async (path) => {
         if (!path) return;
@@ -517,8 +518,11 @@ ${content}
                             activeTab={activeTab}
                             onSwitchTab={handleSwitchTab}
                             onCloseTab={handleCloseTab}
+                            onShowTerminal={() => setPanelVisible(true)}
+                            onFocusTerminal={() => terminalRef.current?.focus()}
                             onAnalyzeComplexity={handleAnalyzeComplexity}
                             onOpenBrowser={() => setShowBrowser(true)}
+                            code={currentTab}
                         />
                         <div className="flex-1 flex overflow-hidden">
                             <div className={`flex-1 flex flex-col min-w-0 ${showBrowser ? 'border-r border-[#2b2b2b]' : ''}`}>
