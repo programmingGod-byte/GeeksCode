@@ -39,6 +39,7 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
                 setIsRunning(false);
                 return;
             }
+            console.log(result)
 
             const cppPath = result.cppPath;
             const dirPath = cppPath.substring(0, cppPath.lastIndexOf('/'));

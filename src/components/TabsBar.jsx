@@ -14,6 +14,7 @@ export default function TabsBar({ tabs, activeTab, onSwitchTab, onCloseTab, onAn
         setLoadingRun(true);
         try {
             const result = await window.run.submit(file_code.content);
+            console.log(result);
             if (result.success) {
                 if (onShowTerminal) onShowTerminal();
                 const isWin = navigator.platform.startsWith('Win');
