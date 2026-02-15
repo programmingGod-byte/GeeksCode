@@ -13,6 +13,7 @@ const { LucideEthernetPort } = require('lucide-react');
 
 let mainWindow;
 let ptyProcess = null;
+let ptyExitListener = null;
 
 // Global AI state
 let llama = null;
@@ -44,37 +45,44 @@ const NOMIC_FILENAME = "nomic-embed-text-v1.5.Q4_K_M.gguf";
 
 // ... existing code ...  
 
-ipcMain.handle('ai:delete-model', async () => {
-  const deepseekPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
-  const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+ipcMain.handle('ai:delete-model', async (_, modelId) => {
   let success = true;
 
   try {
-    if (fs.existsSync(deepseekPath)) {
-      fs.unlinkSync(deepseekPath);
+    if (modelId) {
+      // Delete specific model
+      const m = AI_MODELS[modelId];
+      if (m) {
+        const filePath = path.join(app.getPath('userData'), m.filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } else if (modelId === 'nomic') {
+        const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+        if (fs.existsSync(nomicPath)) {
+          fs.unlinkSync(nomicPath);
+        }
+      }
+    } else {
+      // Delete ALL (Legacy fallback)
+      for (const m of Object.values(AI_MODELS)) {
+        const filePath = path.join(app.getPath('userData'), m.filename);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
+      const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+      if (fs.existsSync(nomicPath)) fs.unlinkSync(nomicPath);
     }
-  } catch (e) {
-    console.error('Error deleting deepseek model:', e);
-    success = false;
-  }
 
-  try {
-    if (fs.existsSync(nomicPath)) {
-      fs.unlinkSync(nomicPath);
-    }
-  } catch (e) {
-    console.error('Error deleting nomic model:', e);
-    success = false;
-  }
-
-  if (success) {
-    model = null; // Reset global model reference
-    context = null; // Reset global context reference
-    sessions.clear(); // Clear all sessions
-    globalAIInitPromise = null; // Allow re-init
+    // Reset AI state if anything was deleted
+    model = null;
+    context = null;
+    sessions.clear();
+    globalAIInitPromise = null;
     return true;
+  } catch (e) {
+    console.error('Error in ai:delete-model:', e);
+    return false;
   }
-  return false;
 });
 
 function createWindow() {
@@ -668,6 +676,10 @@ let currentWorkspacePath = os.homedir();
 
 function createTerminalProcess(cols, rows) {
   if (ptyProcess) {
+    if (ptyExitListener) {
+      ptyExitListener.dispose();
+      ptyExitListener = null;
+    }
     ptyProcess.kill();
   }
 
@@ -687,11 +699,12 @@ function createTerminalProcess(cols, rows) {
     }
   });
 
-  ptyProcess.onExit(() => {
+  ptyExitListener = ptyProcess.onExit(() => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('terminal:exit');
     }
     ptyProcess = null;
+    ptyExitListener = null;
   });
 }
 
@@ -959,7 +972,15 @@ ipcMain.handle('ai:set-model', (_, modelId) => {
 });
 
 ipcMain.handle('ai:get-models', () => {
-  return AI_MODELS;
+  const result = {};
+  for (const [id, m] of Object.entries(AI_MODELS)) {
+    const filePath = path.join(app.getPath('userData'), m.filename);
+    result[id] = {
+      ...m,
+      downloaded: fs.existsSync(filePath)
+    };
+  }
+  return result;
 });
 
 ipcMain.handle('ai:ask', async (event, userPrompt, sessionId = 'default') => {

@@ -93,7 +93,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     indexProject: (dirPath) => ipcRenderer.invoke('fs:indexProject', dirPath),
     searchFiles: (rootPath, query, options) => ipcRenderer.invoke('fs:search', rootPath, query, options),
     destroySession: (sessionId) => ipcRenderer.invoke('ai:destroy-session', sessionId),
-    deleteModel: () => ipcRenderer.invoke('ai:delete-model'),
+    deleteModel: (modelId) => ipcRenderer.invoke('ai:delete-model', modelId),
 });
 contextBridge.exposeInMainWorld('run', {
     submit: (a) => ipcRenderer.invoke('submit-code', a),
