@@ -45,6 +45,8 @@ export default function App() {
     const [inputModal, setInputModal] = useState({ isOpen: false, title: '', placeholder: '', onSubmit: () => { } });
     const [viewingProblem, setViewingProblem] = useState(null);
     const [activeModelId, setActiveModelId] = useState('deepseek');
+    const [isInitialized, setIsInitialized] = useState(false);
+    const [sidebarVisible, setSidebarVisible] = useState(true);
 
     const [ragProgress, setRagProgress] = useState(null);
     const [isAICompleting, setIsAICompleting] = useState(false);
@@ -112,10 +114,16 @@ export default function App() {
                         } catch (e) {
                             console.error("Failed to restore folder:", e);
                         }
+                    } else {
+                        // If no folder path, we still need to mark as initialized
                     }
                     if (state.openTabs) setOpenTabs(state.openTabs);
                     if (state.activeTab) setActiveTab(state.activeTab);
                 }
+                setIsInitialized(true);
+            } else {
+                // If electronAPI is missing (browser mode), mark as initialized
+                setIsInitialized(true);
             }
         };
         initPersistence();
@@ -155,6 +163,10 @@ export default function App() {
         document.body.classList.toggle('light', !isDark);
     }, [theme]);
 
+    const handleToggleTheme = useCallback(() => {
+        setTheme(prev => prev === 'vs-dark' ? 'vs' : 'vs-dark');
+    }, []);
+
     // ─── Titlebar height (macOS vs windows) ──────────────
     useEffect(() => {
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -184,23 +196,44 @@ export default function App() {
 
     // ─── IPC: Close Tab from Main Process (Cmd+W) ──────
     useEffect(() => {
-        window.electronAPI.onCloseTab(() => {
+        const handleCloseActiveTab = () => {
             setOpenTabs((prev) => {
-                setActiveTab((currentActive) => {
-                    if (!currentActive) return null;
-                    const idx = prev.findIndex((t) => t.filePath === currentActive);
-                    if (idx === -1) return currentActive;
-                    const newTabs = prev.filter((t) => t.filePath !== currentActive);
+                let nextActiveTab = null;
+                const activeTabRef = activeTab; // Capture current active tab
+
+                if (activeTabRef) {
+                    const idx = prev.findIndex((t) => t.filePath === activeTabRef);
+                    const newTabs = prev.filter((t) => t.filePath !== activeTabRef);
+
                     if (newTabs.length > 0) {
                         const newIdx = Math.min(idx, newTabs.length - 1);
-                        return newTabs[newIdx].filePath;
+                        nextActiveTab = newTabs[newIdx].filePath;
                     }
-                    return null;
-                });
-                return prev.filter((t) => t.filePath !== activeTab);
+                }
+
+                // Update active tab state
+                setActiveTab(nextActiveTab);
+
+                // Return updated tabs list
+                return prev.filter((t) => t.filePath !== activeTabRef);
             });
-        });
+        };
+
+        const removeListener = window.electronAPI.onCloseTab(handleCloseActiveTab);
+        return () => {
+            if (typeof removeListener === 'function') removeListener();
+        };
     }, [activeTab]);
+
+    // ─── Terminal Exit Listener ────────────────────────
+    useEffect(() => {
+        const unmountExit = window.electronAPI.onTerminalExit(() => {
+            setPanelVisible(false);
+        });
+        return () => {
+            if (unmountExit) unmountExit();
+        };
+    }, []);
 
     // ─── Codeforces Settings Trigger from Main ──────────
     useEffect(() => {
@@ -242,6 +275,11 @@ export default function App() {
                 e.preventDefault();
                 setShowQuickOpen(true);
             }
+            // Toggle Sidebar
+            if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+                e.preventDefault();
+                setSidebarVisible(v => !v);
+            }
         };
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
@@ -267,6 +305,24 @@ export default function App() {
     }, [handleIndexProject]);
 
     // ─── Open File ──────────────────────────────────────
+    useEffect(() => {
+        const unmountOpen = window.electronAPI.onOpenFolder(() => {
+            handleOpenFolder();
+        });
+        const unmountClose = window.electronAPI.onCloseFolder(() => {
+            setFolderPath(null);
+            setFolderName('');
+            setFileEntries([]);
+            setOpenTabs([]);
+            setActiveTab(null);
+            setProjectFiles([]);
+        });
+        return () => {
+            unmountOpen();
+            unmountClose();
+        };
+    }, [handleOpenFolder]);
+
     const handleFileClick = useCallback(async (filePath, fileName) => {
         console.log("File clicked:", filePath, fileName);
         if (!fileName) {
@@ -375,46 +431,31 @@ ${content}
     }, [activeTab, openTabs]);
 
     // ─── File Management ────────────────────────────────
-    const handleCreateFile = useCallback(() => {
+    const handleCreateItem = useCallback(async (name, isFolder = false) => {
         if (!folderPath) return;
-        setInputModal({
-            isOpen: true,
-            title: 'New File',
-            placeholder: 'FileName.ext',
-            onSubmit: async (fileName) => {
-                const fullPath = `${folderPath}/${fileName}`;
-                const ok = await window.electronAPI.createFile(fullPath);
-                if (ok) {
-                    const entries = await window.electronAPI.readDir(folderPath);
-                    setFileEntries(entries);
-                    handleIndexProject(folderPath);
-                    handleFileClick(fullPath, fileName);
-                } else {
-                    console.error("Failed to create file");
-                }
+        const fullPath = `${folderPath}/${name}`;
+        let ok = false;
+
+        if (isFolder) {
+            ok = await window.electronAPI.createFolder(fullPath);
+        } else {
+            ok = await window.electronAPI.createFile(fullPath);
+        }
+
+        if (ok) {
+            const entries = await window.electronAPI.readDir(folderPath);
+            setFileEntries(entries);
+            handleIndexProject(folderPath);
+            if (!isFolder) {
+                handleFileClick(fullPath, name);
             }
-        });
+        } else {
+            console.error(`Failed to create ${isFolder ? 'folder' : 'file'}`);
+        }
     }, [folderPath, handleIndexProject, handleFileClick]);
 
-    const handleCreateFolder = useCallback(() => {
-        if (!folderPath) return;
-        setInputModal({
-            isOpen: true,
-            title: 'New Folder',
-            placeholder: 'FolderName',
-            onSubmit: async (folderName) => {
-                const fullPath = `${folderPath}/${folderName}`;
-                const ok = await window.electronAPI.createFolder(fullPath);
-                if (ok) {
-                    const entries = await window.electronAPI.readDir(folderPath);
-                    setFileEntries(entries);
-                    handleIndexProject(folderPath);
-                } else {
-                    console.error("Failed to create folder");
-                }
-            }
-        });
-    }, [folderPath, handleIndexProject]);
+    const handleCreateFile = () => { }; // Legacy, will be replaced in props
+    const handleCreateFolder = () => { }; // Legacy
 
     // ─── Automatic Indexing (Optimized to skip existing) ──────────
     useEffect(() => {
@@ -467,14 +508,14 @@ ${content}
 
         const inlinePattern = /~\("(.*?)"\);/;
         const match = value.match(inlinePattern);
-        
+
         if (match && editorRef.current) {
             const prompt = match[1];
             const fullMatch = match[0];
-            
+
             // We have a match! Start completion
             setIsAICompleting(true);
-            
+
             let triggerLine = 1;
             if (editorRef.current) {
                 const model = editorRef.current.getModel();
@@ -485,38 +526,38 @@ ${content}
             }
 
             console.log(`AI: Inline completion triggered for: ${prompt} at line ${triggerLine}`);
-            
+
             // We use a small timeout to ensure the UI updates first (showing loading icon)
             setTimeout(async () => {
                 try {
                     const result = await window.electronAPI.inlinePrompt(value, prompt, triggerLine);
-                    
+
                     if (editorRef.current) {
                         const model = editorRef.current.getModel();
                         const currentText = model.getValue();
-                        
+
                         // Re-search for the pattern in current text to get the latest position
                         const latestMatch = currentText.match(inlinePattern);
-                        
+
                         if (latestMatch) {
                             const matchText = latestMatch[0];
                             const matchIndex = currentText.indexOf(matchText);
-                            
+
                             if (matchIndex !== -1) {
                                 const startPos = model.getPositionAt(matchIndex);
                                 const endPos = model.getPositionAt(matchIndex + matchText.length);
-                                
+
                                 const range = new window.monaco.Range(
                                     startPos.lineNumber,
                                     startPos.column,
                                     endPos.lineNumber,
                                     endPos.column
                                 );
-                                
+
                                 editorRef.current.executeEdits('ai-inline-completion', [
                                     { range, text: result, forceMoveMarkers: true }
                                 ]);
-                                
+
                                 console.log(`AI: Inline completion successful. Replaced: "${matchText}" with content.`);
                             } else {
                                 console.warn("AI: Could not find match index in current text.");
@@ -631,34 +672,45 @@ ${content}
             <div id="main-container">
                 <ActivityBar
                     activePanel={activePanel}
-                    onPanelChange={setActivePanel}
-                    theme={theme}
-                    onThemeChange={setTheme}
-                />
-                <Sidebar
-                    folderName={folderName}
-                    folderPath={folderPath}
-                    entries={fileEntries}
-                    onOpenFolder={handleOpenFolder}
-                    onFileClick={handleFileClick}
-                    onCreateFile={handleCreateFile}
-                    onCreateFolder={handleCreateFolder}
-                    activeFile={activeTab}
-                    activePanel={activePanel}
-                    code={currentTab}
-                    onShowTerminal={() => setPanelVisible(true)}
-                    onFocusTerminal={() => terminalRef.current?.focus()}
-                    onCfSettingsClick={() => setShowCfSettings(true)}
-                    onOpenProblem={(url) => {
-                        setBrowserUrl(url);
-                        setShowBrowser(true);
+                    onPanelChange={(panel) => {
+                        if (activePanel === panel) {
+                            setSidebarVisible(!sidebarVisible);
+                        } else {
+                            setActivePanel(panel);
+                            setSidebarVisible(true);
+                        }
                     }}
-                    onViewProblem={handleViewProblem}
-                    style={{ width: `${sidebarWidth}px` }}
-                    theme={theme}
-                    onRefresh={refreshFileExplorer}
+                    isDark={theme === 'vs-dark'}
+                    onToggleTheme={handleToggleTheme}
                 />
-                <div id="sidebar-resize" onMouseDown={handleSidebarMouseDown}></div>
+                {sidebarVisible && (
+                    <>
+                        <Sidebar
+                            folderName={folderName}
+                            folderPath={folderPath}
+                            entries={fileEntries}
+                            onOpenFolder={handleOpenFolder}
+                            onFileClick={handleFileClick}
+                            onCreateItem={handleCreateItem}
+                            activeFile={activeTab}
+                            activePanel={activePanel}
+                            code={currentTab}
+                            onShowTerminal={() => setPanelVisible(true)}
+                            onFocusTerminal={() => terminalRef.current?.focus()}
+                            onCfSettingsClick={() => setShowCfSettings(true)}
+                            onOpenProblem={(url) => {
+                                setBrowserUrl(url);
+                                setShowBrowser(true);
+                            }}
+                            onViewProblem={handleViewProblem}
+                            style={{ width: `${sidebarWidth}px` }}
+                            theme={theme}
+                            onRefresh={refreshFileExplorer}
+                            onCollapse={() => setSidebarVisible(false)}
+                        />
+                        <div id="sidebar-resize" onMouseDown={handleSidebarMouseDown}></div>
+                    </>
+                )}
                 <div id="editor-panel-area">
                     <div id="editor-area">
                         <TabsBar
@@ -691,7 +743,14 @@ ${content}
                                         editorRef={editorRef}
                                         isAICompleting={isAICompleting}
                                     />
-                                ) : (
+                                ) : !isInitialized ? (
+                                    <div className="flex-1 flex flex-col items-center justify-center opacity-10 select-none animate-pulse">
+                                        <div className="p-8 flex flex-col items-center">
+                                            <Globe size={64} className="mb-4 text-white/40" />
+                                            <p className="text-xl font-medium text-white/60">Initializing Workspace...</p>
+                                        </div>
+                                    </div>
+                                ) : folderPath ? null : (
                                     <WelcomeView onOpenFolder={handleOpenFolder} />
                                 )}
                             </div>

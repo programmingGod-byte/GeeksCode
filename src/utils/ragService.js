@@ -18,10 +18,10 @@ class RagService {
         this.modelPath = modelPath;
         const indexPath = path.join(userDataPath, 'vectra_index');
         this.statePath = path.join(userDataPath, 'rag_state.json');
-        
+
         // Load indexed files state
         this._loadState();
-        
+
         if (!fs.existsSync(indexPath)) {
             fs.mkdirSync(indexPath, { recursive: true });
         }
@@ -85,15 +85,15 @@ class RagService {
     async _initModel() {
         if (this.model) return;
         if (!this.modelPath) {
-             console.error("RAG: Model path not set. Call init() first.");
-             return;
+            console.error("RAG: Model path not set. Call init() first.");
+            return;
         }
 
         try {
             const { getLlama } = await import("node-llama-cpp");
             // Disable GPU explicitly to prevent Vulkan/CUDA compatibility crashes
-            const llama = await getLlama({ gpu: false }); 
-            
+            const llama = await getLlama({ gpu: 'auto' });
+
             this.model = await llama.loadModel({
                 modelPath: this.modelPath,
                 // gpuLayers: 0 is correct for model load, but we also ensure backend is CPU
@@ -109,7 +109,7 @@ class RagService {
     async getEmbeddings(text) {
         if (!this.context) await this._initModel();
         if (!this.context) throw new Error("Embedding context not initialized");
-        
+
         // Nomic specific prefix for queries/documents if needed, 
         // strictly speaking v1.5 might handle it, but adding "search_document: " is often recommended for docs
         // and "search_query: " for queries.
@@ -126,16 +126,16 @@ class RagService {
                 console.error(`RAG: PDF parsing failed for ${filePath}:`, e);
                 return null;
             });
-            
+
             if (!data || !data.text) {
-                 console.warn(`RAG: No text extracted from PDF: ${filePath}`);
-                 return;
+                console.warn(`RAG: No text extracted from PDF: ${filePath}`);
+                return;
             }
             const text = data.text;
-            
+
             // Simple chunking
             const chunks = this._chunkText(text, 1000); // ~1000 chars per chunk
-            
+
             for (const chunk of chunks) {
                 const vector = await this.getEmbeddings("search_document: " + chunk);
                 await this.index.insertItem({
@@ -186,28 +186,28 @@ class RagService {
             return [];
         }
     }
-    
+
     async indexProject(files, onProgress) {
         if (this.isProcessing) {
-             console.warn("RAG: Already processing an index request.");
-             return;
+            console.warn("RAG: Already processing an index request.");
+            return;
         }
         this.isProcessing = true;
         let consecutiveErrors = 0;
-        
+
         try {
             if (!files || !Array.isArray(files)) return;
             // Filter out already indexed files
             const filesToIndex = files.filter(f => !this.indexedFiles.has(f.path));
             console.log(`RAG: Indexing ${filesToIndex.length} new project files (skipped ${files.length - filesToIndex.length})...`);
-            
+
             let processed = 0;
             const total = filesToIndex.length;
 
             for (const file of filesToIndex) {
                 // Ignore node_modules, .git, and other common noise
                 if (file.path.includes('node_modules') || file.path.includes('.git') || file.path.includes('.vscode')) continue;
-                
+
                 // Skip files that are likely binary or too large for useful RAG context
                 try {
                     const stats = fs.statSync(file.path);
@@ -221,32 +221,32 @@ class RagService {
 
                 try {
                     if (onProgress) onProgress(processed, total, path.basename(file.path));
-                    
+
                     if (file.path.endsWith('.pdf')) {
                         await this.addDocument(file.path);
                     } else if (['.js', '.ts', '.jsx', '.tsx', '.py', '.cpp', '.hpp', '.h', '.c', '.java', '.md', '.txt', '.json', '.css', '.html'].some(ext => file.path.endsWith(ext))) {
                         await this.addCodeDocument(file.path);
                     }
-                    
+
                     // Mark as indexed
                     this.indexedFiles.add(file.path);
                     processed++;
                     consecutiveErrors = 0; // Reset on success
-                    
+
                     // Periodically save state (every 10 files)
                     if (processed % 10 === 0) this._saveState();
-                    
+
                     // Prevent UI freeze / heavy load
                     await new Promise(resolve => setTimeout(resolve, 250));
                 } catch (err) {
                     consecutiveErrors++;
                     console.warn(`RAG: Failed to index file ${file.path}`, err);
-                    
+
                     // Critical failure: Index corruption
                     if (err.message && err.message.includes("Unexpected end of JSON input")) {
                         console.error("RAG: CRITICAL - Index corrupted during operation. Aborting.");
                         // Force reset state so next run attempts recovery
-                        this.index = null; 
+                        this.index = null;
                         break;
                     }
                 }
@@ -261,8 +261,8 @@ class RagService {
     async addCodeDocument(filePath) {
         try {
             const content = fs.readFileSync(filePath, 'utf-8');
-            const chunks = this._chunkText(content, 1500); 
-            
+            const chunks = this._chunkText(content, 1500);
+
             for (const chunk of chunks) {
                 const vector = await this.getEmbeddings("search_document: " + chunk);
                 await this.index.insertItem({
@@ -276,7 +276,7 @@ class RagService {
             }
             console.log(`RAG: Added code doc ${path.basename(filePath)}`);
         } catch (error) {
-           throw error; // Let caller handle/log
+            throw error; // Let caller handle/log
         }
     }
 
@@ -288,40 +288,40 @@ class RagService {
         try {
             const allFiles = fs.readdirSync(dirPath).filter(file => file.toLowerCase().endsWith('.pdf'));
             const filesToIndex = allFiles.filter(file => !this.indexedFiles.has(path.join(dirPath, file)));
-            
+
             console.log(`RAG: Found ${filesToIndex.length} new PDFs to index in ${dirPath} (skipped ${allFiles.length - filesToIndex.length})`);
-            
+
             let processed = 0;
             const total = filesToIndex.length;
 
             for (const file of filesToIndex) {
-               if (consecutiveErrors >= 3) {
-                   console.error("RAG: Too many consecutive errors. Aborting directory indexing.");
-                   break;
-               }
+                if (consecutiveErrors >= 3) {
+                    console.error("RAG: Too many consecutive errors. Aborting directory indexing.");
+                    break;
+                }
 
-               const fullPath = path.join(dirPath, file);
-               try {
-                   if (onProgress) onProgress(processed, total, file);
-                   
-                   await this.addDocument(fullPath);
-                   
-                   this.indexedFiles.add(fullPath);
-                   processed++;
-                   consecutiveErrors = 0;
-                   
-                   if (processed % 5 === 0) this._saveState();
+                const fullPath = path.join(dirPath, file);
+                try {
+                    if (onProgress) onProgress(processed, total, file);
 
-                   // Small delay to prevent event loop starvation or native thread issues
-                   await new Promise(resolve => setTimeout(resolve, 250));
-               } catch (err) {
-                   consecutiveErrors++;
-                   console.warn(`RAG: Failed to index ${file}`, err);
-                   if (err.message && err.message.includes("Unexpected end of JSON input")) {
-                       console.error("RAG: CRITICAL - Index corrupted. Aborting.");
-                       break;
-                   }
-               }
+                    await this.addDocument(fullPath);
+
+                    this.indexedFiles.add(fullPath);
+                    processed++;
+                    consecutiveErrors = 0;
+
+                    if (processed % 5 === 0) this._saveState();
+
+                    // Small delay to prevent event loop starvation or native thread issues
+                    await new Promise(resolve => setTimeout(resolve, 250));
+                } catch (err) {
+                    consecutiveErrors++;
+                    console.warn(`RAG: Failed to index ${file}`, err);
+                    if (err.message && err.message.includes("Unexpected end of JSON input")) {
+                        console.error("RAG: CRITICAL - Index corrupted. Aborting.");
+                        break;
+                    }
+                }
             }
             this._saveState();
         } finally {
