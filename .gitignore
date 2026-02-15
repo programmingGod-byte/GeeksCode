@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 out/
+dist_electron/
 
 # OS files
 .DS_Store

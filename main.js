@@ -4,6 +4,8 @@ const fs = require('fs');
 const os = require('os');
 const pty = require('node-pty');
 const axios = require('axios');
+const crypto = require('crypto');
+
 const ragService = require('./src/utils/ragService');
 const codeModel = require('./src/utils/codeModel');
 const { LucideEthernetPort } = require('lucide-react');
@@ -15,39 +17,54 @@ let ptyProcess = null;
 let llama = null;
 let model = null;
 let context = null;
+let activeModelId = 'deepseek'; // Default model
 const sessions = new Map(); // Map of sessionId -> LlamaChatSession
 const initializingSessions = new Set(); // To prevent race conditions in init
-const EXPECTED_MODEL_SIZE = 873582624;
-// ls ~/.config/code-editor/deepseek-1.3b.gguf && rm ~/.config/code-editor/deepseek-1.3b.gguf
-// /home/shivam/.config/code-editor/deepseek-1.3b.gguf
-const deepSeekModelUrl = "https://huggingface.co/TheBloke/deepseek-coder-1.3b-instruct-GGUF/resolve/main/deepseek-coder-1.3b-instruct.Q4_K_M.gguf";
+
+const AI_MODELS = {
+    'deepseek': {
+        id: 'deepseek',
+        name: 'DeepSeek Coder 1.3B',
+        url: 'https://huggingface.co/TheBloke/deepseek-coder-1.3b-instruct-GGUF/resolve/main/deepseek-coder-1.3b-instruct.Q4_K_M.gguf',
+        filename: 'deepseek-1.3b.gguf',
+        expectedSize: 873582624
+    },
+    'qwen': {
+        id: 'qwen',
+        name: 'Qwen2.5 Coder 1.5B',
+        url: 'https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf',
+        filename: 'qwen2.5-coder-1.5b-instruct-q4_k_m.gguf',
+        expectedSize: null // Size can vary or be unknown
+    }
+};
+
 const NOMIC_MODEL_URL = "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf";
 const NOMIC_FILENAME = "nomic-embed-text-v1.5.Q4_K_M.gguf";
 
 // ... existing code ...  
 
 ipcMain.handle('ai:delete-model', async () => {
-  const deepseekPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
-  const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
-  let success = true;
-
-  try {
-    if (fs.existsSync(deepseekPath)) {
-      fs.unlinkSync(deepseekPath);
+    const deepseekPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
+    const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+    let success = true;
+    
+    try {
+        if (fs.existsSync(deepseekPath)) {
+            fs.unlinkSync(deepseekPath);
+        }
+    } catch (e) {
+        console.error('Error deleting deepseek model:', e);
+        success = false;
     }
-  } catch (e) {
-    console.error('Error deleting deepseek model:', e);
-    success = false;
-  }
 
-  try {
-    if (fs.existsSync(nomicPath)) {
-      fs.unlinkSync(nomicPath);
+    try {
+        if (fs.existsSync(nomicPath)) {
+            fs.unlinkSync(nomicPath);
+        }
+    } catch (e) {
+        console.error('Error deleting nomic model:', e);
+        success = false;
     }
-  } catch (e) {
-    console.error('Error deleting nomic model:', e);
-    success = false;
-  }
 
   if (success) {
     model = null; // Reset global model reference
@@ -133,6 +150,21 @@ function createWindow() {
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate));
 
+  // Context Menu Implementation
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    const menu = Menu.buildFromTemplate([
+      { role: 'undo' },
+      { role: 'redo' },
+      { type: 'separator' },
+      { role: 'cut' },
+      { role: 'copy' },
+      { role: 'paste' },
+      { type: 'separator' },
+      { role: 'selectAll' },
+    ]);
+    menu.popup({ window: mainWindow });
+  });
+
   // ─── Bypass X-Frame-Options for In-App Browser ───
   // ─── Bypass X-Frame-Options for In-App Browser ───
   mainWindow.webContents.session.webRequest.onHeadersReceived(
@@ -192,17 +224,217 @@ function ParseCode(code) {
   return results
 }
 
+// Global tracker for autocomplete specific sequence (to allow killing it for higher priority tasks)
+let globalAutocompleteSequence = null;
+
+// Helper: get sequence with retry and aggressive recycling
+async function getSequenceWithRetry(context, retryCount = 0) {
+    try {
+        return context.getSequence();
+    } catch (err) {
+        if (err.message.includes("No sequences left") && retryCount < 3) {
+             console.warn(`AI: No sequences left (Attempt ${retryCount + 1}). Recycling...`);
+             
+             // 0. Kill Autocomplete FIRST (Lowest priority)
+             if (globalAutocompleteSequence && !globalAutocompleteSequence.disposed) {
+                 try {
+                     globalAutocompleteSequence.dispose();
+                     globalAutocompleteSequence = null;
+                     console.log("AI: Force-killed autocomplete sequence to free resources.");
+                     // Retry immediately
+                     return await getSequenceWithRetry(context, retryCount + 1);
+                 } catch(e) {
+                     console.warn("Error disposing autocomplete sequence:", e);
+                 }
+             }
+
+             // 1. Recycle ANY disposed sequence that might be hanging?
+             // (node-llama-cpp might track them, but we can only dispose our tracked ones)
+             
+             // 2. Aggressively recycle the oldest session from our map
+             const iterator = sessions.keys();
+             const oldestSessionId = iterator.next().value;
+             
+             if (oldestSessionId) {
+                 const oldSessionData = sessions.get(oldestSessionId);
+                 if (oldSessionData && oldSessionData.sequence) {
+                     try {
+                         if (!oldSessionData.sequence.disposed) {
+                             oldSessionData.sequence.dispose();
+                             console.log(`AI: Force-recycled session: ${oldestSessionId}`);
+                         }
+                     } catch (e) {
+                         console.warn(`Error disposing session ${oldestSessionId}:`, e);
+                     }
+                 }
+                 sessions.delete(oldestSessionId);
+             } else {
+                 // If no sessions map entries, but still no sequences, it means ephemeral sequences (autocomplete/submit) are hogging.
+                 // We can't easily reach them unless we tracked them.
+                 // But waiting a bit might help if they are in 'finally' blocks.
+                 console.warn("AI: No sessions to recycle. Waiting for ephemeral sequences to free up...");
+                 await new Promise(r => setTimeout(r, 200 * (retryCount + 1)));
+             }
+             
+             return await getSequenceWithRetry(context, retryCount + 1);
+        }
+        throw err;
+    }
+}
+
 ipcMain.handle('submit-code', async (event, code) => {
-  let prompts = ParseCode(code)
-  let finalCppCode;
-  if (prompts.length !== 0) {
-    const modelPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
-    await codeModel.init(modelPath);
-    finalCppCode = await codeModel.query(code);
-    console.log(finalCppCode);
-  } else {
-    finalCppCode = code;
+  // 1. Ensure AI is initialized
+  if (!context) {
+    console.log("AI: Context not initialized for submit-code. Auto-initializing...");
+    const activeModel = AI_MODELS[activeModelId];
+    if (activeModel) {
+      try {
+        await initAIModel(path.join(app.getPath('userData'), activeModel.filename), 'submit-code-session', false);
+      } catch (e) {
+        console.error("AI: Auto-init failed:", e);
+      }
+    }
   }
+
+  if (!context) {
+      console.error("AI: Failed to initialize for submit-code.");
+      const tmpDir = os.tmpdir()
+      const cppPath = path.join(tmpDir, 'temp.cpp')
+      fs.writeFileSync(cppPath, code)
+      return { success: true, cppPath: cppPath }; 
+  }
+
+  let finalCppCode = code;
+  
+  try {
+      const { LlamaChatSession } = await import("node-llama-cpp");
+      const markerRegex = /!@#\$\("([^"]+)"\);?/g;
+      const matches = [];
+      let match;
+      
+      // Find all markers first
+      while ((match = markerRegex.exec(code)) !== null) {
+          matches.push({
+              index: match.index,
+              length: match[0].length,
+              prompt: match[1],
+              fullMatch: match[0]
+          });
+      }
+      
+      const replacements = [];
+      
+      // We process matches to generate code
+      for (const m of matches) {
+          // Calculate line number for context
+          const stringsBefore = code.substring(0, m.index);
+          const lineNumber = stringsBefore.split('\n').length;
+          
+          // Context extraction (similar to inline-prompt)
+          // Context extraction (similar to inline-prompt)
+          const lines = code.split('\n');
+          const startLine = Math.max(0, lineNumber - 50);
+          const endLine = Math.min(lines.length, lineNumber + 20);
+          
+          // Mask the marker in the context to prevent AI from repeating it
+          const contextLines = lines
+              .slice(startLine, endLine)
+              .map((line, idx) => {
+                  const currentLineNum = startLine + idx + 1;
+                  if (currentLineNum === lineNumber) {
+                      return `${currentLineNum}: // Generate code for: ${m.prompt}`; 
+                  }
+                  return `${currentLineNum}: ${line}`;
+              });
+              
+          const contextBlock = contextLines.join('\n');
+          
+          // 2. Construct Prompt (Strict Code-Only)
+          const systemInstruction = `You are an expert coding assistant.
+Task: Write valid C++ code to replace the comment "// Generate code for: ${m.prompt}".
+Rules:
+1. Output ONLY the code.
+2. NO markdown backticks.
+3. NO explanations or conversational text.
+4. Maintain indentation.`;
+
+          const userMsg = `Context:
+${contextBlock}
+
+Instruction: Write the C++ code to replace "// Generate code for: ${m.prompt}" at line ${lineNumber}.
+Return ONLY the code.`;
+
+          let generatedCode = `// AI Generation Code for: ${m.prompt}`; // Default in case of failure
+
+          const generateWithRetry = async (retryCount = 0) => {
+              let sequence = null;
+              try {
+                  sequence = await getSequenceWithRetry(context);
+                  const tempSession = new LlamaChatSession({ 
+                      contextSequence: sequence 
+                  });
+                  
+                  console.log(`AI: Processing marker "${m.prompt}" (Attempt ${retryCount + 1})`);
+                  
+                  const response = await tempSession.prompt(userMsg, {
+                      systemPrompt: systemInstruction,
+                      temperature: 0.2, // Low temperature for code
+                      maxTokens: 2048
+                  });
+                  
+                  // Cleanup Response (Robust extraction)
+                  let cleanResponse = response.trim();
+                  const codeBlockMatch = cleanResponse.match(/```(?:[a-zA-Z]*)\n([\s\S]*?)```/);
+                  if (codeBlockMatch) {
+                      cleanResponse = codeBlockMatch[1].trim();
+                  } else {
+                       const respLines = cleanResponse.split('\n');
+                       if (respLines.length > 0 && /^(sure|here|okay|certainly|i can|below is)/i.test(respLines[0])) {
+                           cleanResponse = respLines.slice(1).join('\n').trim();
+                       }
+                  }
+                  
+                  generatedCode = cleanResponse; // Success!
+                  return true;
+
+              } catch (err) {
+                  if (err.message.includes("No sequences left") && retryCount < 2) {
+                       console.warn("AI: No sequences left, forcing disposal and retrying...");
+                       // Try to kill global autocomplete if needed (handled in getSequenceWithRetry mostly, but recursive call helps)
+                       return await generateWithRetry(retryCount + 1);
+                  }
+                  
+                  console.error(`AI generation failed for marker "${m.prompt}":`, err);
+                  generatedCode = `// Error generating code for: ${m.prompt} (${err.message})`;
+                  return false;
+              } finally {
+                  if (sequence && !sequence.disposed) {
+                      try {
+                          sequence.dispose();
+                      } catch (e) { console.error("Error disposing sequence:", e); }
+                  }
+              }
+          };
+
+          await generateWithRetry();
+          
+          replacements.push({
+              ...m,
+              replacement: generatedCode
+          });
+      }
+      
+      // Apply replacements from back to front
+      for (let i = replacements.length - 1; i >= 0; i--) {
+          const item = replacements[i];
+          finalCppCode = finalCppCode.substring(0, item.index) + item.replacement + finalCppCode.substring(item.index + item.length);
+      }
+      
+  } catch (error) {
+      console.error("submit-code error:", error);
+      // Fallback to original code if something major crashes
+  }
+
   const tmpDir = os.tmpdir()
   const cppPath = path.join(tmpDir, 'temp.cpp')
   fs.writeFileSync(cppPath, finalCppCode)
@@ -410,6 +642,60 @@ ipcMain.handle('fs:indexProject', async (_, rootPath) => {
   }
 });
 
+ipcMain.handle('fs:search', async (_, rootPath, query, options = {}) => {
+  console.log(`fs:search called with root=${rootPath}, query=${query}, options=${JSON.stringify(options)}`);
+  const results = [];
+  if (!rootPath || !query) return [];
+  const queryLower = query.toLowerCase();
+  
+  const walk = (dir) => {
+    try {
+      const files = fs.readdirSync(dir, { withFileTypes: true });
+      for (const file of files) {
+        const fullPath = path.join(dir, file.name);
+        if (file.isDirectory()) {
+          if (['node_modules', '.git', 'dist', 'build', '.next', '.venv', '.gemini'].includes(file.name)) continue;
+          walk(fullPath);
+        } else {
+          const ext = path.extname(file.name).toLowerCase();
+          const allowedExtensions = options.extensions || ['.cpp', '.hpp', '.h', '.c']; 
+          
+          if (allowedExtensions.includes(ext)) {
+            try {
+              const content = fs.readFileSync(fullPath, 'utf-8');
+              const lines = content.split('\n');
+              for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (line.toLowerCase().includes(queryLower)) {
+                  results.push({
+                    filePath: fullPath,
+                    fileName: file.name,
+                    line: i + 1,
+                    text: line.trim()
+                  });
+                  if (results.length > 500) return;
+                }
+              }
+            } catch (e) { }
+          }
+        }
+        if (results.length > 500) return;
+      }
+    } catch (e) {
+      console.warn(`Error walking dir ${dir}:`, e);
+    }
+  };
+
+  try {
+    walk(rootPath);
+    console.log(`fs:search found ${results.length} results`);
+    return results;
+  } catch (err) {
+    console.error('fs:search error', err);
+    return [];
+  }
+});
+
 ipcMain.handle('shell:run', async (_, command, cwd) => {
   return new Promise((resolve) => {
     const { exec } = require('child_process');
@@ -545,189 +831,240 @@ async function downloadModel(event, url, filename, expectedSize = null, displayN
 
 // 2. Start the AI
 let globalAIInitPromise = null;
+let sessionInitLock = false;
+let currentLoadedModelPath = null;
 
-async function initDeepSeek(modelPath, sessionId = 'default') {
-  if (sessions.has(sessionId)) return true;
+async function initAIModel(modelPath, sessionId = 'default', createSession = true) {
+  if (sessions.has(sessionId) && currentLoadedModelPath === modelPath) return true;
+  
+  // If we don't need a session, just check if context exists
+  if (!createSession && context && currentLoadedModelPath === modelPath) return true;
 
+  while (sessionInitLock) await new Promise(r => setTimeout(r, 50));
+  if (sessions.has(sessionId) && currentLoadedModelPath === modelPath) return true;
+
+  sessionInitLock = true;
   try {
-    // Global lock for AI resources (model, context)
+    // If model path changed, we must reset
+    if (currentLoadedModelPath !== modelPath) {
+        console.log(`AI: Model path changed from ${currentLoadedModelPath} to ${modelPath}. Resetting backend...`);
+        model = null;
+        context = null;
+        sessions.clear();
+        globalAIInitPromise = null;
+        currentLoadedModelPath = modelPath;
+    }
+
     if (!globalAIInitPromise) {
-      globalAIInitPromise = (async () => {
-        const { getLlama } = await import("node-llama-cpp");
-        console.log("AI: Initializing Llama backend...");
-
-        // Conservative initialization: CPU-only to avoid SIGILL/CUDA issues
-        let currentLlama = await getLlama({ gpu: false });
-        llama = currentLlama;
-
-        console.log("AI: Backend initialized. Loading model...");
-        if (!model) {
-          try {
-            model = await llama.loadModel({
-              modelPath,
-              // gpuLayers: 0
-            });
-            console.log("AI: Model loaded successfully.");
-          } catch (loadErr) {
-            console.error("AI: Critical error during model load:", loadErr);
-            throw loadErr;
-          }
-        }
-
-        if (!context) {
-          console.log("AI: Creating context...");
-          context = await model.createContext({
-            contextSize: 2048,
-            sequences: 2 // Allow Chat + Complexity sessions
-          });
-          console.log("AI: Context created.");
-        }
-        return { model, context };
-      })();
+        globalAIInitPromise = (async () => {
+             const { getLlama } = await import("node-llama-cpp");
+             console.log("AI: Initializing Llama backend...");
+             
+             // Conservative initialization: CPU-only to avoid SIGILL/CUDA issues
+             let currentLlama = await getLlama({ gpu: false });
+             llama = currentLlama;
+             
+             console.log("AI: Backend initialized. Loading model...");
+             if (!model) {
+                 try {
+                     model = await llama.loadModel({ 
+                         modelPath,
+                         // gpuLayers: 0
+                     });
+                     console.log("AI: Model loaded successfully.");
+                 } catch (loadErr) {
+                     console.error("AI: Critical error during model load:", loadErr);
+                     throw loadErr;
+                 }
+             }
+             
+             if (!context) {
+                 console.log("AI: Creating context...");
+                 context = await model.createContext({
+                     contextSize: 2048,
+                     sequences: 2 // Allow Chat + Complexity sessions (Recycling handles the rest)
+                 });
+                 console.log("AI: Context created.");
+             }
+             return { model, context };
+        })();
     }
 
     const { context: aiContext } = await globalAIInitPromise;
 
+    if (!createSession) {
+        // Just ensuring context is ready
+        return true;
+    }
+
     if (aiContext.sequencesLeft === 0) {
-      console.warn("No sequences left. Recycling the oldest session...");
-      // Find the oldest session (first key in Map) to recycle
-      const iterator = sessions.keys();
-      const oldestSessionId = iterator.next().value;
-      if (oldestSessionId) {
-        const oldSessionData = sessions.get(oldestSessionId);
-        if (oldSessionData && oldSessionData.sequence) {
-          try {
-            if (!oldSessionData.sequence.disposed) {
-              oldSessionData.sequence.dispose();
-              console.log(`Recycled session: ${oldestSessionId}`);
+        console.warn("No sequences left. Recycling the oldest session...");
+        // Find the oldest session (first key in Map) to recycle
+        const iterator = sessions.keys();
+        const oldestSessionId = iterator.next().value;
+        if (oldestSessionId) {
+            const oldSessionData = sessions.get(oldestSessionId);
+            if (oldSessionData && oldSessionData.sequence) {
+                try {
+                    if (!oldSessionData.sequence.disposed) {
+                        oldSessionData.sequence.dispose();
+                        console.log(`Recycled session: ${oldestSessionId}`);
+                    }
+                } catch (e) {
+                    console.warn(`Error disposing session ${oldestSessionId}:`, e);
+                }
             }
-          } catch (e) {
-            console.warn(`Error disposing session ${oldestSessionId}:`, e);
-          }
+            sessions.delete(oldestSessionId);
         }
-        sessions.delete(oldestSessionId);
-      }
     }
 
     const { LlamaChatSession } = await import("node-llama-cpp");
     const sequence = aiContext.getSequence();
-    const chatSession = new LlamaChatSession({
+    const chatSession = new LlamaChatSession({ 
       contextSequence: sequence,
       systemPrompt: "You are a helpful coding assistant. When asked for code, always provide implementation in C++ unless another language is explicitly requested."
     });
-
+    
     sessions.set(sessionId, { session: chatSession, sequence });
     console.log(`AI Session initialized: ${sessionId}`);
     return true;
   } catch (err) {
     console.error(`AI Init failed for session ${sessionId}:`, err);
-    globalAIInitPromise = null; // Allow retry on failure
     return false;
+  } finally {
+      sessionInitLock = false;
   }
 }
 
 // IPC Handlers
 ipcMain.handle('ai:init', async (event, sessionId = 'default') => {
-  try {
-    // Download DeepSeek
-    const modelPath = await downloadModel(event, deepSeekModelUrl, 'deepseek-1.3b.gguf', EXPECTED_MODEL_SIZE, "DeepSeek Coder");
-
-    // Download Nomic
-    const nomicPath = await downloadModel(event, NOMIC_MODEL_URL, NOMIC_FILENAME, null, "Nomic Embed");
+    try {
+        // Download Active Model
+        const activeModel = AI_MODELS[activeModelId];
+        const modelPath = await downloadModel(event, activeModel.url, activeModel.filename, activeModel.expectedSize, activeModel.name);
+        
+        // Download Nomic
+        const nomicPath = await downloadModel(event, NOMIC_MODEL_URL, NOMIC_FILENAME, null, "Nomic Embed");
 
     // Initialize RAG Service
     await ragService.init(app.getPath('userData'), nomicPath);
 
-    await initDeepSeek(modelPath, sessionId);
 
-    /*
-    // Auto-index Knowledge Base if not already done
-    const kbPath = path.join(__dirname, 'src', 'cp_dsa_knowledge_base');
-    if (fs.existsSync(kbPath)) {
-        console.log("RAG: Auto-indexing KB after initial download...");
-        // Use the optimized indexDirectory which skips already indexed files
-        await ragService.indexDirectory(kbPath, (current, total, filename) => {
-            if (!event.sender.isDestroyed()) {
-                event.sender.send('rag:progress', { current, total, filename, type: 'kb' });
-            }
-        });
+        await initAIModel(path.join(app.getPath('userData'), activeModel.filename), sessionId);
+
+        /*
+        // Auto-index Knowledge Base if not already done
+        const kbPath = path.join(__dirname, 'src', 'cp_dsa_knowledge_base');
+        if (fs.existsSync(kbPath)) {
+            console.log("RAG: Auto-indexing KB after initial download...");
+            // Use the optimized indexDirectory which skips already indexed files
+            await ragService.indexDirectory(kbPath, (current, total, filename) => {
+                if (!event.sender.isDestroyed()) {
+                    event.sender.send('rag:progress', { current, total, filename, type: 'kb' });
+                }
+            });
+        }
+        */
+
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
     }
-    */
-
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
 });
 
 
 
 ipcMain.handle('ai:check-model', () => {
-  const deepseekPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
-  const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+    const activeModel = AI_MODELS[activeModelId];
+    if (!activeModel) return false;
 
-  // Check DeepSeek
-  if (!fs.existsSync(deepseekPath)) return false;
-  const stats = fs.statSync(deepseekPath);
-  if (stats.size !== EXPECTED_MODEL_SIZE) return false;
+    const modelPath = path.join(app.getPath('userData'), activeModel.filename);
+    const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+    
+    // Check Active Model
+    if (!fs.existsSync(modelPath)) return false;
+    // Only check size if expectedSize is known
+    if (activeModel.expectedSize) {
+        const stats = fs.statSync(modelPath);
+        if (stats.size !== activeModel.expectedSize) return false;
+    }
+    
+    // Check Nomic (optional size check if we knew it, for now just existence)
+    if (!fs.existsSync(nomicPath)) return false;
+    
+    return true;
+});
 
-  // Check Nomic (optional size check if we knew it, for now just existence)
-  if (!fs.existsSync(nomicPath)) return false;
+ipcMain.handle('ai:get-active-model', () => {
+    return activeModelId;
+});
 
-  return true;
+ipcMain.handle('ai:set-model', (_, modelId) => {
+    if (AI_MODELS[modelId]) {
+        activeModelId = modelId;
+        return true;
+    }
+    return false;
+});
+
+ipcMain.handle('ai:get-models', () => {
+    return AI_MODELS;
 });
 
 ipcMain.handle('ai:ask', async (event, userPrompt, sessionId = 'default') => {
   let sessionData = sessions.get(sessionId);
-
+  
   // Auto-initialize if session is missing (e.g., recycled)
   if (!sessionData) {
-    console.log(`AI: Session "${sessionId}" not found (likely recycled). Re-initializing...`);
-    await initDeepSeek(path.join(app.getPath('userData'), 'deepseek-1.3b.gguf'), sessionId);
-    sessionData = sessions.get(sessionId);
+      console.log(`AI: Session "${sessionId}" not found (likely recycled). Re-initializing...`);
+      const activeModel = AI_MODELS[activeModelId];
+      if (activeModel) {
+        await initAIModel(path.join(app.getPath('userData'), activeModel.filename), sessionId);
+        sessionData = sessions.get(sessionId);
+      }
   }
 
   if (!sessionData) {
-    console.warn(`AI Ask failed: Session ${sessionId} still not initialized`);
-    return "AI is not initialized. Please wait.";
+      console.warn(`AI Ask failed: Session ${sessionId} still not initialized`);
+      return "AI is not initialized. Please wait.";
   }
   const { session } = sessionData;
   try {
-    let augmentedPrompt = userPrompt;
+      let augmentedPrompt = userPrompt;
 
-    // Only perform RAG retrieval for general chat, skip for specialized tasks like complexity analysis
-    // We also check if the prompt looks like it's asking for personal/config stuff that shouldn't search docs
-    // skip RAG for very short messages or greetings
-    const isGreeting = /^(hi|hello|hey|hola|yo|hello there)/i.test(userPrompt.trim());
-    const tooShort = userPrompt.trim().length < 10;
-    const skipRAG = sessionId === 'complexity-session' || sessionId.startsWith('system-') || isGreeting || tooShort;
-
-    if (!skipRAG) {
-      console.log(`AI: [Session ${sessionId}] Retrieving RAG context...`);
-      // Strictly request only 3 chunks
-      const contextItems = await ragService.query(userPrompt, 3).catch(e => {
-        console.warn("RAG: Query failed, skipping context", e);
-        return [];
-      });
-
-      if (contextItems.length > 0) {
-        const contextString = contextItems.map(item => `[Source: ${item.source}]\n${item.text}`).join("\n\n");
-        // Final safety truncation of context string
-        const truncatedContext = contextString.substring(0, 4000);
-        augmentedPrompt = `Relevant Context:\n---------------------\n${truncatedContext}\n---------------------\nInstruction: Use the context above if relevant, otherwise use your general knowledge. Respond to: ${userPrompt}`;
-        console.log(`AI: [Session ${sessionId}] Augmented prompt with ${contextItems.length} chunks.`);
+      // Only perform RAG retrieval for general chat, skip for specialized tasks like complexity analysis
+      // We also check if the prompt looks like it's asking for personal/config stuff that shouldn't search docs
+      // skip RAG for very short messages or greetings
+      const isGreeting = /^(hi|hello|hey|hola|yo|hello there)/i.test(userPrompt.trim());
+      const tooShort = userPrompt.trim().length < 10;
+      const skipRAG = sessionId === 'complexity-session' || sessionId.startsWith('system-') || isGreeting || tooShort;
+      
+      if (!skipRAG) {
+          console.log(`AI: [Session ${sessionId}] Retrieving RAG context...`);
+          // Strictly request only 3 chunks
+          const contextItems = await ragService.query(userPrompt, 3).catch(e => {
+              console.warn("RAG: Query failed, skipping context", e);
+              return [];
+          });
+          
+          if (contextItems.length > 0) {
+              const contextString = contextItems.map(item => `[Source: ${item.source}]\n${item.text}`).join("\n\n");
+              // Final safety truncation of context string
+              const truncatedContext = contextString.substring(0, 4000); 
+              augmentedPrompt = `Relevant Context:\n---------------------\n${truncatedContext}\n---------------------\nInstruction: Use the context above if relevant, otherwise use your general knowledge. Respond to: ${userPrompt}`;
+              console.log(`AI: [Session ${sessionId}] Augmented prompt with ${contextItems.length} chunks.`);
+          }
+      } else {
+          console.log(`AI: [Session ${sessionId}] Skipping RAG augmentation (Session: ${sessionId}, Greeting/Short: ${isGreeting||tooShort}).`);
       }
-    } else {
-      console.log(`AI: [Session ${sessionId}] Skipping RAG augmentation (Session: ${sessionId}, Greeting/Short: ${isGreeting || tooShort}).`);
-    }
 
-    console.log(`AI: [Session ${sessionId}] Sending prompt to model...`);
-    const response = await session.prompt(augmentedPrompt);
-    console.log(`AI: [Session ${sessionId}] Response received.`);
-    return response || "(Empty response from AI)";
+      console.log(`AI: [Session ${sessionId}] Sending prompt to model...`);
+      const response = await session.prompt(augmentedPrompt);
+      console.log(`AI: [Session ${sessionId}] Response received.`);
+      return response || "(Empty response from AI)";
   } catch (error) {
-    console.error(`AI: [Session ${sessionId}] Prompt failed:`, error);
-    return `Error: ${error.message}`;
+      console.error(`AI: [Session ${sessionId}] Prompt failed:`, error);
+      return `Error: ${error.message}`;
   }
 });
 
@@ -764,43 +1101,59 @@ ipcMain.handle('codeforces:save-creds', async (_, creds) => {
   }
 });
 
+const generateCodeforcesSig = (methodName, params, secret) => {
+    const rand = Math.floor(Math.random() * 899999) + 100000;
+    const sortedParams = Object.keys(params).sort().map(key => `${key}=${params[key]}`).join('&');
+    const text = `${rand}/${methodName}?${sortedParams}#${secret}`;
+    const hash = crypto.createHash('sha512').update(text).digest('hex');
+    return `${rand}${hash}`;
+};
+
 ipcMain.handle('codeforces:get-submissions', async (_, handle) => {
-  try {
-    const response = await axios.get(`https://codeforces.com/api/user.status?handle=${handle}&from=1&count=20`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Codeforces submissions Error:', error.message);
-    if (error.response) {
-      return { status: 'FAILED', comment: error.response.data.comment || `HTTP ${error.response.status}` };
+    try {
+        const response = await axios.get(`https://codeforces.com/api/user.status?handle=${handle}&from=1&count=20`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Codeforces submissions Error:', error.message);
+        if (error.response) {
+            return { status: 'FAILED', comment: error.response.data.comment || `HTTP ${error.response.status}` };
+        }
+        return { status: 'FAILED', comment: error.message };
     }
-    return { status: 'FAILED', comment: error.message };
-  }
 });
 
 ipcMain.handle('codeforces:get-user-info', async (_, handle) => {
-  try {
-    const response = await axios.get(`https://codeforces.com/api/user.info?handles=${handle}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Codeforces user.info Error:', error.message);
-    if (error.response) {
-      return { status: 'FAILED', comment: error.response.data.comment || `HTTP ${error.response.status}` };
+    try {
+        const response = await axios.get(`https://codeforces.com/api/user.info?handles=${handle}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Codeforces user.info Error:', error.message);
+        if (error.response) {
+            return { status: 'FAILED', comment: error.response.data.comment || `HTTP ${error.response.status}` };
+        }
+        return { status: 'FAILED', comment: error.message };
     }
-    return { status: 'FAILED', comment: error.message };
-  }
 });
 
+async function getCFCreds() {
+    if (fs.existsSync(CF_CONFIG_PATH)) {
+        try {
+            return JSON.parse(fs.readFileSync(CF_CONFIG_PATH, 'utf8'));
+        } catch (e) {
+            return null;
+        }
+    }
+    return null;
+}
+
 ipcMain.handle('codeforces:get-creds', async () => {
-  const configPath = path.join(os.homedir(), '.geeks_cf_config.json');
-  if (fs.existsSync(configPath)) {
-    return JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  }
-  return null;
+    return getCFCreds();
 });
+
 
 // ─── Codeforces Dataset Filtering ──────────────────────────
 const DATASET_PATH = path.join(__dirname, 'src', 'codeforces_dataset');
@@ -911,27 +1264,150 @@ ipcMain.handle('editor:get-state', async () => {
 
 // Autocomplete handler
 ipcMain.handle('ai:complete', async (event, codeContext) => {
-  if (!context) return null;
-  try {
-    const { LlamaChatSession } = await import("node-llama-cpp");
-    // For autocomplete, we try to get a sequence. If context is full, this might fail unless we recycle.
-    // But autocomplete is ephemeral.
-    const tempSession = new LlamaChatSession({
-      contextSequence: context.getSequence()
-    });
+    if (!context) return null;
+    let tempSession = null;
+    let sequence = null;
+    try {
+        const { LlamaChatSession } = await import("node-llama-cpp");
+        // For autocomplete, we try to get a sequence. If context is full, this might fail unless we recycle.
+        // But autocomplete is ephemeral.
+        sequence = await getSequenceWithRetry(context);
+        globalAutocompleteSequence = sequence;
+        
+        tempSession = new LlamaChatSession({ 
+            contextSequence: sequence 
+        });
 
-    const [prefix, suffix] = codeContext.split('<CURSOR>');
-    const prompt = `<｜fim_begin｜>${prefix}<｜fim_hole｜>${suffix}<｜fim_end｜>`;
+        const [prefix, suffix] = codeContext.split('<CURSOR>');
+        const prompt = `<｜fim_begin｜>${prefix}<｜fim_hole｜>${suffix}<｜fim_end｜>`;
+        
+        const response = await tempSession.prompt(prompt, {
+            maxTokens: 50,
+            temperature: 0.1,
+            stopOnTokens: ["\n", "}", ";", "<｜fim_end｜>"] 
+        });
+        
+        return response.trim();
+    } catch (error) {
+        console.error("AI Autocomplete failed:", error);
+        return null;
+    } finally {
+        if (sequence && !sequence.disposed) {
+            try {
+                sequence.dispose();
+            } catch (e) {
+                console.error("Error disposing autocomplete sequence:", e);
+            }
+        }
+        if (globalAutocompleteSequence === sequence) {
+             globalAutocompleteSequence = null;
+        }
+    }
+});
 
-    const response = await tempSession.prompt(prompt, {
-      maxTokens: 50,
-      temperature: 0.1,
-      stopOnTokens: ["\n", "}", ";", "<｜fim_end｜>"]
-    });
+// Inline Prompt Handler (~("prompt"))
+ipcMain.handle('ai:inline-prompt', async (event, code, prompt, lineNumber) => {
+    if (!context) {
+        console.log("AI: Context not initialized for inline prompt. Auto-initializing...");
+        const activeModel = AI_MODELS[activeModelId];
+        if (activeModel) {
+            try {
+                await initAIModel(path.join(app.getPath('userData'), activeModel.filename), 'inline-session', false);
+            } catch (e) {
+                console.error("AI: Auto-init failed:", e);
+                return `// Error: AI initialization failed: ${e.message}`;
+            }
+        } else {
+             return `// Error: No active model selected`;
+        }
+    }
+    
+    if (!context) {
+         return `// Error: AI failed to initialize`;
+    }
 
-    return response.trim();
-  } catch (error) {
-    console.error("AI Autocomplete failed:", error);
-    return null;
-  }
+    let tempSession = null;
+    let sequence = null;
+
+    try {
+        const { LlamaChatSession } = await import("node-llama-cpp");
+        
+        // 1. Context Truncation
+        const lines = code.split('\n');
+        const startLine = Math.max(0, lineNumber - 50); // 50 lines before
+        const endLine = Math.min(lines.length, lineNumber + 20); // 20 lines after
+        
+        // Add line numbers to context for the model
+        const contextLines = lines
+            .slice(startLine, endLine)
+            .map((line, idx) => `${startLine + idx + 1}: ${line}`);
+            
+        const contextBlock = contextLines.join('\n');
+        
+        // 2. Construct Prompt
+        const systemInstruction = `You are an expert coding assistant.
+User Request: "${prompt}"
+Task: Write valid C++ code to fulfill the User Request.
+Output ONLY the requested code. Do NOT output explanations or markdown backticks.`;
+
+        const userMsg = `Request: "${prompt}"
+Context:
+${contextBlock}
+
+Write the code for "${prompt}". Only return the code.`;
+
+        // 3. Execution
+        sequence = await getSequenceWithRetry(context);
+        tempSession = new LlamaChatSession({ 
+            contextSequence: sequence 
+        });
+
+        console.log(`AI: Inline prompt processing for line ${lineNumber}: "${prompt}"`);
+        
+        const response = await tempSession.prompt(userMsg, {
+            systemPrompt: systemInstruction,
+            temperature: 0.2, // Low temperature for deterministic code
+            maxTokens: 1024
+        });
+        
+        console.log("AI: Inline response generated.");
+        
+        // Cleanup response (robust extraction)
+        let cleanResponse = response.trim();
+        
+        // Regex to find first code block ```...```
+        const codeBlockMatch = cleanResponse.match(/```(?:[a-zA-Z]*)\n([\s\S]*?)```/);
+        
+        if (codeBlockMatch) {
+            cleanResponse = codeBlockMatch[1].trim();
+        } else {
+             // Fallback: If no code block, try to strip potential "Sure..." text if it appears to be a mixed response
+             // But valid code might not be in a block. 
+             // Let's remove lines that don't look like code if they are at the start? 
+             // For now, simpler is creating a heuristic: 
+             // If response starts with text and then has code, the prompt instructions should have prevented this, 
+             // but 'deepseek' can be chatty.
+             
+             // Simple heuristic: remove lines starting with "Sure", "Here", "Okay"
+             const lines = cleanResponse.split('\n');
+             if (lines.length > 0 && /^(sure|here|okay|certainly|i can|below is)/i.test(lines[0])) {
+                 cleanResponse = lines.slice(1).join('\n').trim();
+             }
+        }
+        
+        return cleanResponse;
+
+    } catch (error) {
+        console.error("AI Inline Prompt failed:", error);
+        return `// Error generating code: ${error.message}`;
+    } finally {
+        if (sequence && !sequence.disposed) {
+            try {
+                sequence.dispose();
+                console.log("AI: Inline prompt sequence disposed.");
+            } catch (e) {
+                console.error("Error disposing inline prompt sequence:", e);
+            }
+        }
+    }
 });

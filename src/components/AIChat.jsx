@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Bot, User, Download, Loader, Trash2, Plus, MessageSquare, X, Database } from 'lucide-react';
+import { Send, Bot, User, Download, Loader, Trash2, Plus, MessageSquare, X, Database, Copy } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -454,8 +454,8 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
                                 {msg.role === 'user' ? 'You' : 'GeeksAI'}
                             </span>
                         </div>
-                        <div className={`pl-6 text-[13px] leading-relaxed ${isDark ? 'text-gray-300' : 'text-gray-800'}`}>
-                             {msg.role === 'ai' ? (
+                            <div className={`pl-6 text-[13px] leading-relaxed allow-select ${isDark ? 'text-gray-300' : 'text-gray-800'}`}>
+                                 {msg.role === 'ai' ? (
                                     <ReactMarkdown 
                                         remarkPlugins={[remarkGfm]}
                                         components={{
@@ -465,6 +465,16 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
                                                 return !inline && match ? (
                                                     <div className="group relative">
                                                         <div className="absolute top-2 right-2 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                                            <button 
+                                                                onClick={() => {
+                                                                    navigator.clipboard.writeText(codeContent);
+                                                                }}
+                                                                className="p-1 px-2 bg-gray-700 hover:bg-gray-600 text-white rounded text-[10px] flex items-center space-x-1 shadow-lg border border-gray-600"
+                                                                title="Copy Code"
+                                                            >
+                                                                <Copy size={10} />
+                                                                <span>Copy</span>
+                                                            </button>
                                                             <button 
                                                                 onClick={() => handleRunCode(codeContent, match[1])}
                                                                 className="p-1 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-[10px] flex items-center space-x-1 shadow-lg"

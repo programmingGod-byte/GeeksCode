@@ -11,6 +11,17 @@ const icons = [
         ),
     },
     {
+        id: 'test-generator',
+        title: 'Test Case Generator',
+        svg: (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M7 2h10v2h-2v17c0 1.1-.9 2-2 2h-2c-1.1 0-2-.9-2-2V4H7V2z" />
+                <path d="M10 12h4" />
+                <path d="M10 16h4" />
+            </svg>
+        ),
+    },
+    {
         id: 'search',
         title: 'Search',
         svg: (
