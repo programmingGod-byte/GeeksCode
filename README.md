@@ -98,16 +98,6 @@ GeeksCode's AI capabilities can be enhanced with custom models. You can use [Smo
 
 **Before running GeeksCode, you may need to configure your antivirus or security software:**
 
-#### Windows Users:
-- Windows Defender or third-party antivirus software may flag the application due to:
-  - Terminal emulation capabilities (node-pty)
-  - File system access
-  - Code execution features
-- **Recommended actions:**
-  - Add GeeksCode installation folder to your antivirus exclusion list
-  - Temporarily disable real-time protection during installation/first run
-  - If Windows SmartScreen blocks the app, click "More info" → "Run anyway"
-
 #### macOS Users:
 - Gatekeeper may prevent the app from opening with a message: *"GeeksCode cannot be opened because it is from an unidentified developer"*
 - **Recommended actions:**
