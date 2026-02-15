@@ -2,6 +2,12 @@
 
 GeeksCode is a high-performance, feature-rich code editor built with Electron, React, and Node.js. It is designed for competitive programmers and developers who require a streamlined, AI-integrated workflow. This editor combines a modern UI with powerful tools like an integrated terminal, Codeforces problem explorer, AI-powered assistance, and automated test case generation.
 
+### Contributors:
+- Pranab Pandey (B24148)
+- Shivam Kumar (B24220)
+- Shivang Tripathi (B24221)
+- Satvik Garg (B24219)
+
 ## Key Features
 
 ### Core Functionality
