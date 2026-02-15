@@ -6,7 +6,6 @@ GeeksCode is a high-performance, feature-rich code editor built with Electron, R
 - Pranab Pandey (B24148)
 - Shivam Kumar (B24220)
 - Shivang Tripathi (B24221)
-- Satvik Garg (B24219)
 
 ## Key Features
 
