@@ -5,7 +5,10 @@ node_modules/
 dist/
 out/
 dist_electron/
-
+# Ignore temporary test folders and zips
+fuckoff/
+*.zip
+test_*.js
 # OS files
 .DS_Store
 Thumbs.db

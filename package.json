@@ -11,28 +11,39 @@
     "dev": "concurrently --kill-others \"vite --config vite.config.js\" \"wait-on http://localhost:5173 && electron . --no-sandbox\""
   },
   "build": {
-    "appId": "com.geekscode.editor",
-    "productName": "GeeksCode",
-    "directories": {
-      "output": "dist_electron"
-    },
-    "files": [
-      "dist/**/*",
-      "main.js",
-      "preload.js",
-      "package.json",
-      {
-        "from": "src",
-        "to": "src",
-        "filter": ["**/*"]
-      },
-      "node_modules/**/*"
-    ],
-    "linux": {
-      "target": "AppImage",
-      "category": "Development"
-    }
+  "appId": "com.geekscode.editor",
+  "productName": "GeeksCode",
+  "directories": {
+    "output": "dist_electron"
   },
+  "files": [
+    "dist/**/*",
+    "main.js",
+    "preload.js",
+    "package.json",
+    "styles.css" 
+  ],
+  "extraResources": [
+    {
+      "from": "src",
+      "to": "src",
+      "filter": ["**/*"]
+    }
+  ],
+  "linux": {
+    "target": "AppImage",
+    "category": "Development"
+  },
+  "win": {
+    "target": "nsis",
+    "icon": "build/icon.ico"
+  },
+  "mac": {
+    "target": "dmg",
+    "category": "public.app-category.developer-tools"
+  },
+  "asar": true
+},
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
     "@vitejs/plugin-react": "^4.2.1",
