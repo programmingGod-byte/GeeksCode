@@ -72,6 +72,7 @@ function TreeItem({ entry, depth, onFileClick, activeFile }) {
 import CodeforcesExplorer from './CodeforcesExplorer';
 import CodeforcesProblemFilter from './CodeforcesProblemFilter';
 import CodeRunner from './CodeRunner';
+import TestCaseGenerator from './TestCaseGenerator';
 
 export default function Sidebar({
     folderName,
@@ -106,6 +107,9 @@ export default function Sidebar({
     }
     if (activePanel === 'run') {
         return <CodeRunner activeFile={activeFile} code={code} onShowTerminal={onShowTerminal} onFocusTerminal={onFocusTerminal} onRefresh={onRefresh} />;
+    }
+    if (activePanel === 'testgen') {
+        return <TestCaseGenerator activeFile={activeFile} code={code} />;
     }
 
     return (
