@@ -1,6 +1,20 @@
 import React from 'react';
 
-export default function StatusBar({ position, language, encoding, theme, onThemeChange, zoomLevel, onZoomIn, onZoomOut, onResetZoom, ragProgress }) {
+export default function StatusBar({ 
+    position, 
+    language, 
+    encoding, 
+    theme, 
+    onThemeChange, 
+    zoomLevel, 
+    onZoomIn, 
+    onZoomOut, 
+    onResetZoom, 
+    ragProgress,
+    activeModelId,
+    onModelChange,
+    onOpenModelSettings
+}) {
     const zoomPercent = Math.round((zoomLevel + 1) * 100); // Simple mapping for display
     const progressPercent = ragProgress ? Math.round(((ragProgress.current + 1) / ragProgress.total) * 100) : 0;
 
@@ -27,6 +41,29 @@ export default function StatusBar({ position, language, encoding, theme, onTheme
             </div>
             
             <div className="status-right">
+                <div className="status-item model-selector-container">
+                    <select 
+                        value={activeModelId} 
+                        onChange={(e) => onModelChange(e.target.value)}
+                        className="theme-select"
+                        title="Active AI Model"
+                    >
+                        <option value="deepseek">DeepSeek 1.3B</option>
+                        <option value="qwen">Qwen2.5 1.5B</option>
+                    </select>
+                </div>
+
+                <button 
+                    onClick={onOpenModelSettings}
+                    className="status-item hover:text-white transition-colors flex items-center space-x-1"
+                    title="Manage AI Models"
+                >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    <span>AI Settings</span>
+                </button>
+
                 <div className="status-item zoom-controls">
                     <button onClick={onZoomOut} title="Zoom Out" className="zoom-btn">−</button>
                     <span className="zoom-value" onClick={onResetZoom} title="Reset Zoom">

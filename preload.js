@@ -47,17 +47,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onRagProgress: (callback) => ipcRenderer.on('rag:progress', (_, data) => callback(data)),
 
     // AI
-    // AI
-    initAI: (sessionId) => ipcRenderer.invoke('ai:init', sessionId),
-    checkModel: () => ipcRenderer.invoke('ai:check-model'),
-    askAI: (prompt, sessionId) => ipcRenderer.invoke('ai:ask', prompt, sessionId),
-    completeAI: (codeContext) => ipcRenderer.invoke('ai:complete', codeContext),
-    onAIDownloadProgress: (callback) => ipcRenderer.on('ai:download-progress', (_, progress, message) => callback(progress, message)),
+  // AI
+  initAI: (sessionId) => ipcRenderer.invoke('ai:init', sessionId),
+  checkModel: () => ipcRenderer.invoke('ai:check-model'),
+  askAI: (prompt, sessionId) => ipcRenderer.invoke('ai:ask', prompt, sessionId),
+  completeAI: (codeContext) => ipcRenderer.invoke('ai:complete', codeContext),
+  inlinePrompt: (code, prompt, lineNumber) => ipcRenderer.invoke('ai:inline-prompt', code, prompt, lineNumber),
+  setModel: (modelId) => ipcRenderer.invoke('ai:set-model', modelId),
+  getActiveModel: () => ipcRenderer.invoke('ai:get-active-model'),
+  getModels: () => ipcRenderer.invoke('ai:get-models'),
+  onAIDownloadProgress: (callback) => ipcRenderer.on('ai:download-progress', (_, progress, message) => callback(progress, message)),
 
     // Zoom
     setZoom: (level) => ipcRenderer.invoke('app:set-zoom', level),
     getZoom: () => ipcRenderer.invoke('app:get-zoom'),
     indexProject: (dirPath) => ipcRenderer.invoke('fs:indexProject', dirPath),
+    searchFiles: (rootPath, query, options) => ipcRenderer.invoke('fs:search', rootPath, query, options),
     createFile: (filePath) => ipcRenderer.invoke('fs:createFile', filePath),
     createFolder: (folderPath) => ipcRenderer.invoke('fs:createFolder', folderPath),
     destroySession: (sessionId) => ipcRenderer.invoke('ai:destroy-session', sessionId),

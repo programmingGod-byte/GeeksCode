@@ -4,7 +4,11 @@ node_modules/
 # Build output
 dist/
 out/
-
+dist_electron/
+# Ignore temporary test folders and zips
+fuckoff/
+*.zip
+test_*.js
 # OS files
 .DS_Store
 Thumbs.db

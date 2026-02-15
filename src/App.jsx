@@ -44,10 +44,33 @@ export default function App() {
     const [browserUrl, setBrowserUrl] = useState('https://codeforces.com');
     const [inputModal, setInputModal] = useState({ isOpen: false, title: '', placeholder: '', onSubmit: () => { } });
     const [viewingProblem, setViewingProblem] = useState(null);
+    const [activeModelId, setActiveModelId] = useState('deepseek');
 
     const [ragProgress, setRagProgress] = useState(null);
+    const [isAICompleting, setIsAICompleting] = useState(false);
     const editorRef = useRef(null);
     const terminalRef = useRef(null);
+
+    // ─── AI Model Sync ─────────────────────────────────
+    useEffect(() => {
+        const syncModel = async () => {
+            if (window.electronAPI && window.electronAPI.getActiveModel) {
+                const modelId = await window.electronAPI.getActiveModel();
+                setActiveModelId(modelId);
+            }
+        };
+        syncModel();
+    }, []);
+
+    const handleModelChange = useCallback(async (modelId) => {
+        if (window.electronAPI && window.electronAPI.setModel) {
+            const ok = await window.electronAPI.setModel(modelId);
+            if (ok) {
+                setActiveModelId(modelId);
+                console.log(`Model switched to: ${modelId}`);
+            }
+        }
+    }, []);
 
     const handleIndexProject = useCallback(async (path) => {
         if (!path) return;
@@ -438,7 +461,78 @@ ${content}
                 return t;
             })
         );
-    }, []);
+
+        // Inline AI Completion Detection: ~("prompt")
+        if (isAICompleting) return;
+
+        const inlinePattern = /~\("(.*?)"\);/;
+        const match = value.match(inlinePattern);
+        
+        if (match && editorRef.current) {
+            const prompt = match[1];
+            const fullMatch = match[0];
+            
+            // We have a match! Start completion
+            setIsAICompleting(true);
+            
+            let triggerLine = 1;
+            if (editorRef.current) {
+                const model = editorRef.current.getModel();
+                const matchIndex = value.indexOf(fullMatch);
+                if (matchIndex !== -1) {
+                    triggerLine = model.getPositionAt(matchIndex).lineNumber;
+                }
+            }
+
+            console.log(`AI: Inline completion triggered for: ${prompt} at line ${triggerLine}`);
+            
+            // We use a small timeout to ensure the UI updates first (showing loading icon)
+            setTimeout(async () => {
+                try {
+                    const result = await window.electronAPI.inlinePrompt(value, prompt, triggerLine);
+                    
+                    if (editorRef.current) {
+                        const model = editorRef.current.getModel();
+                        const currentText = model.getValue();
+                        
+                        // Re-search for the pattern in current text to get the latest position
+                        const latestMatch = currentText.match(inlinePattern);
+                        
+                        if (latestMatch) {
+                            const matchText = latestMatch[0];
+                            const matchIndex = currentText.indexOf(matchText);
+                            
+                            if (matchIndex !== -1) {
+                                const startPos = model.getPositionAt(matchIndex);
+                                const endPos = model.getPositionAt(matchIndex + matchText.length);
+                                
+                                const range = new window.monaco.Range(
+                                    startPos.lineNumber,
+                                    startPos.column,
+                                    endPos.lineNumber,
+                                    endPos.column
+                                );
+                                
+                                editorRef.current.executeEdits('ai-inline-completion', [
+                                    { range, text: result, forceMoveMarkers: true }
+                                ]);
+                                
+                                console.log(`AI: Inline completion successful. Replaced: "${matchText}" with content.`);
+                            } else {
+                                console.warn("AI: Could not find match index in current text.");
+                            }
+                        } else {
+                            console.warn("AI: Could not find pattern match in current text.");
+                        }
+                    }
+                } catch (err) {
+                    console.error("AI Inline completion failed:", err);
+                } finally {
+                    setIsAICompleting(false);
+                }
+            }, 100);
+        }
+    }, [isAICompleting]);
 
     // ─── Save ───────────────────────────────────────────
     const handleSave = useCallback(async () => {
@@ -595,6 +689,7 @@ ${content}
                                         onContentChange={handleContentChange}
                                         onSave={handleSave}
                                         editorRef={editorRef}
+                                        isAICompleting={isAICompleting}
                                     />
                                 ) : (
                                     <WelcomeView onOpenFolder={handleOpenFolder} />
@@ -642,6 +737,9 @@ ${content}
                 onZoomOut={handleZoomOut}
                 onResetZoom={handleResetZoom}
                 ragProgress={ragProgress}
+                activeModelId={activeModelId}
+                onModelChange={handleModelChange}
+                onOpenModelSettings={() => setShowModelModal(true)}
             />
             <QuickOpenModal
                 isOpen={showQuickOpen}
