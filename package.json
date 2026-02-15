@@ -7,7 +7,8 @@
     "start": "concurrently --kill-others \"vite --config vite.config.js\" \"wait-on http://localhost:5173 && electron . --no-sandbox\"",
     "build": "vite build --config vite.config.js",
     "electron": "electron . --no-sandbox",
-    "dev": "concurrently --kill-others \"vite --config vite.config.js\" \"wait-on http://localhost:5173 && electron . --no-sandbox\""
+    "dev": "concurrently --kill-others \"vite --config vite.config.js\" \"wait-on http://localhost:5173 && electron . --no-sandbox\"",
+    "postinstall": "electron-builder install-app-deps"
   },
   "build": {
     "appId": "com.geekscode.editor",
@@ -17,18 +18,38 @@
     },
     "files": [
       "dist/**/*",
-      "src/**/*",
       "main.js",
       "preload.js",
       "package.json",
-      "styles.css"
+      "styles.css",
+      "!node_modules/node-llama-cpp/bins/**/*",
+      "!node_modules/node-llama-cpp/llama/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/node-pty/**/*",
+      "node_modules/pdf-parse/**/*"
     ],
     "asar": true,
     "mac": {
       "target": "dmg",
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.icns"
-    }
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Development"
+    },
+    "extraResources": [
+      {
+        "from": "node_modules/node-pty/build/Release",
+        "to": "node-pty",
+        "filter": ["**/*"]
+      }
+    ]
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
@@ -39,7 +60,6 @@
     "monaco-editor": "^0.44.0",
     "node-llama-cpp": "^3.15.1",
     "node-pty": "^1.0.0",
-    "pdf-parse": "1.1.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
