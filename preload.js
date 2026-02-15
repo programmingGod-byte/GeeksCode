@@ -47,12 +47,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onRagProgress: (callback) => ipcRenderer.on('rag:progress', (_, data) => callback(data)),
 
     // AI
-  // AI
-  initAI: (sessionId) => ipcRenderer.invoke('ai:init', sessionId),
-  checkModel: () => ipcRenderer.invoke('ai:check-model'),
-  askAI: (prompt, sessionId) => ipcRenderer.invoke('ai:ask', prompt, sessionId),
-  completeAI: (codeContext) => ipcRenderer.invoke('ai:complete', codeContext),
-  onAIDownloadProgress: (callback) => ipcRenderer.on('ai:download-progress', (_, progress, message) => callback(progress, message)),
+    // AI
+    initAI: (sessionId) => ipcRenderer.invoke('ai:init', sessionId),
+    checkModel: () => ipcRenderer.invoke('ai:check-model'),
+    askAI: (prompt, sessionId) => ipcRenderer.invoke('ai:ask', prompt, sessionId),
+    completeAI: (codeContext) => ipcRenderer.invoke('ai:complete', codeContext),
+    onAIDownloadProgress: (callback) => ipcRenderer.on('ai:download-progress', (_, progress, message) => callback(progress, message)),
 
     // Zoom
     setZoom: (level) => ipcRenderer.invoke('app:set-zoom', level),
@@ -64,5 +64,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteModel: () => ipcRenderer.invoke('ai:delete-model'),
 });
 contextBridge.exposeInMainWorld('run', {
-    submit: (a) => ipcRenderer.invoke('submit-code', a)
+    submit: (a) => ipcRenderer.invoke('submit-code', a),
+    parse: (a) => ipcRenderer.invoke('parsed-code', a),
+    generateTestCases: (code, count) => ipcRenderer.invoke('generate-testcases', code, count)
 })

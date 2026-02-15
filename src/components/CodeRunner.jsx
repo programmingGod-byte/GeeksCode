@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, CheckCircle, XCircle, Terminal, AlertCircle } from 'lucide-react';
+import { Play, CheckCircle, XCircle, Terminal, AlertCircle, Clock } from 'lucide-react';
 
 export default function CodeRunner({ activeFile, activeFileContent, code, onShowTerminal, onFocusTerminal, onRefresh }) {
     const [input, setInput] = useState('');
@@ -8,6 +8,7 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
     const [error, setError] = useState('');
     const [status, setStatus] = useState('idle'); // idle, running, success, error
     const [isRunning, setIsRunning] = useState(false);
+    const [runtime, setRuntime] = useState(null);
 
     const handleRun = async () => {
         if (!activeFile) {
@@ -27,6 +28,7 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
         setStatus('running');
         setError('');
         setActualOutput('');
+        setRuntime(null);
 
         try {
             const result = await window.run.submit(code.content);
@@ -72,7 +74,10 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
                 runCmd = `"${origExePath}"`;
             }
 
+            const startTime = performance.now();
             const runResult = await window.electronAPI.runCommand(runCmd, origDir);
+            const endTime = performance.now();
+            setRuntime(endTime - startTime);
 
             // Cleanup temp cpp only — keep the executable alongside the source
             await window.electronAPI.runCommand(`rm -f "${cppPath}"`, dirPath);
@@ -186,6 +191,12 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
                             {status === 'success' ? 'Passed' :
                                 status === 'failed' ? 'Wrong Answer' : 'Execution Error'}
                         </span>
+                        {runtime !== null && (
+                            <span className="ml-auto flex items-center space-x-1 text-[10px] text-[#969696]">
+                                <Clock size={10} />
+                                <span>{runtime >= 1000 ? `${(runtime / 1000).toFixed(2)}s` : `${Math.round(runtime)}ms`}</span>
+                            </span>
+                        )}
                     </div>
 
                     {status === 'failed' && (
