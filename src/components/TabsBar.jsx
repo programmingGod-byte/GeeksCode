@@ -96,9 +96,7 @@ export default function TabsBar({ tabs, activeTab, onSwitchTab, onCloseTab, onAn
                             data-path={tab.filePath}
                             onClick={() => onSwitchTab(tab.filePath)}
                         >
-                            <span className="tab-icon">
-                                <span className={`codicon codicon-${iconInfo.icon}`} style={{ color: iconInfo.color }}></span>
-                            </span>
+                            <span className="tab-icon" dangerouslySetInnerHTML={{ __html: iconInfo.icon }}></span>
                             <span className="tab-label">{tab.fileName}</span>
                             <span className="tab-dirty"></span>
                             <span

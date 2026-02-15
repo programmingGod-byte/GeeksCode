@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, AlertCircle, CheckCircle, X } from 'lucide-react';
+import { Download, AlertCircle, CheckCircle, X, Trash2 } from 'lucide-react';
 
 const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
     const [downloading, setDownloading] = useState(false);
@@ -13,7 +13,7 @@ const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
         if (window.electronAPI && window.electronAPI.getModels) {
             const status = await window.electronAPI.getModels();
             setModels(status);
-            
+
             // Simplified "isComplete": At least one main model + Nomic
             // We'll check this in the Parent or use a more granular check
         }
@@ -49,12 +49,14 @@ const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
         }
     };
 
-    const handleDelete = async () => {
+    const handleDelete = async (modelId) => {
         if (window.electronAPI && window.electronAPI.deleteModel) {
             try {
-                await window.electronAPI.deleteModel();
+                // If modelId is a string, it's a specific model. If it's an event (from footer button), it's all.
+                const id = typeof modelId === 'string' ? modelId : undefined;
+                await window.electronAPI.deleteModel(id);
                 await refreshModelStatus();
-                setError(null);
+                if (!id) setError(null);
             } catch (e) {
                 setError("Failed to delete model: " + e.message);
             }
@@ -65,8 +67,8 @@ const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
             <div className="bg-[#1e1e1e] border border-[#2b2b2b] rounded-lg shadow-2xl w-[600px] p-6 text-vscode-text animate-fade-in relative max-h-[90vh] overflow-y-auto">
                 {!downloading && (
-                    <button 
-                        onClick={onClose} 
+                    <button
+                        onClick={onClose}
                         className="absolute top-4 right-4 text-gray-400 hover:text-white"
                     >
                         <X size={20} />
@@ -77,7 +79,7 @@ const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
                     <div className="w-12 h-12 bg-blue-600/20 rounded-full flex items-center justify-center mb-4 text-blue-500">
                         <Download size={24} />
                     </div>
-                    
+
                     <h2 className="text-xl font-bold text-white mb-2">AI Model Management</h2>
                     <p className="text-gray-400 text-sm mb-6">
                         Download local LLMs for code completion and chat. These run entirely on your machine.
@@ -106,22 +108,26 @@ const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
                                         {id === 'deepseek' ? 'Fast and efficient for code completion.' : 'Powerful instructions and reasoning.'}
                                     </p>
                                 </div>
-                                
-                                <button
-                                    disabled={downloading || model.downloaded}
-                                    onClick={() => handleDownload(id)}
-                                    className={`ml-4 px-4 py-1.5 text-xs font-medium rounded transition-all flex items-center space-x-2 ${
-                                        model.downloaded 
-                                            ? 'bg-green-600/10 text-green-500 cursor-default' 
-                                            : 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95'
-                                    }`}
-                                >
-                                    {model.downloaded ? (
-                                        <><CheckCircle size={14} /> <span>Ready</span></>
-                                    ) : (
-                                        <><Download size={14} /> <span>Download</span></>
-                                    )}
-                                </button>
+
+                                {model.downloaded ? (
+                                    <button
+                                        disabled={downloading}
+                                        onClick={() => handleDelete(id)}
+                                        className="ml-4 px-4 py-1.5 text-xs font-medium rounded transition-all flex items-center space-x-2 bg-red-400/10 text-red-500 hover:bg-red-500 hover:text-white group"
+                                    >
+                                        <Trash2 size={14} className="group-hover:animate-pulse" />
+                                        <span>Delete</span>
+                                    </button>
+                                ) : (
+                                    <button
+                                        disabled={downloading}
+                                        onClick={() => handleDownload(id)}
+                                        className="ml-4 px-4 py-1.5 text-xs font-medium rounded transition-all flex items-center space-x-2 bg-blue-600 text-white hover:bg-blue-700 active:scale-95"
+                                    >
+                                        <Download size={14} />
+                                        <span>Download</span>
+                                    </button>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -133,8 +139,8 @@ const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
                                 <span>{Math.round(progress)}%</span>
                             </div>
                             <div className="w-full bg-[#2d2d2d] h-2 rounded-full overflow-hidden">
-                                <div 
-                                    className="bg-blue-600 h-full transition-all duration-200 ease-out" 
+                                <div
+                                    className="bg-blue-600 h-full transition-all duration-200 ease-out"
                                     style={{ width: `${progress}%` }}
                                 ></div>
                             </div>

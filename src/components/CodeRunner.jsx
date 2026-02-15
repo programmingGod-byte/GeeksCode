@@ -115,16 +115,16 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
     };
 
     return (
-        <div className="flex flex-col h-full bg-[#252526] text-[#cccccc] p-4 space-y-4 overflow-y-auto custom-scrollbar">
+        <div className="flex flex-col h-full bg-[var(--bg-sidebar)] text-[var(--text-primary)] p-4 space-y-4 overflow-y-auto custom-scrollbar">
 
             {/* Header */}
-            <div className="flex justify-between items-center border-b border-[#3c3c3c] pb-2">
+            <div className="flex justify-between items-center border-b border-[var(--border-color)] pb-2">
                 <div className="flex items-center space-x-2 text-sm font-bold uppercase tracking-wider">
                     <Terminal size={16} className="text-blue-400" />
                     <span>Code Runner</span>
                 </div>
                 {activeFile && (
-                    <span className="text-xs text-[#858585] truncate max-w-[150px]" title={activeFile}>
+                    <span className="text-xs text-[var(--text-secondary)] truncate max-w-[150px]" title={activeFile}>
                         {activeFile.split('/').pop()}
                     </span>
                 )}
@@ -136,7 +136,7 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
                 <textarea
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    className="w-full h-24 bg-[#1e1e1e] border border-[#3c3c3c] rounded p-2 text-xs font-mono focus:outline-none focus:border-blue-500/50 resize-y"
+                    className="w-full h-24 bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] rounded p-2 text-xs font-mono focus:outline-none focus:border-blue-500/50 resize-y"
                     placeholder="Enter program input here..."
                 />
             </div>
@@ -147,7 +147,7 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
                 <textarea
                     value={expectedOutput}
                     onChange={(e) => setExpectedOutput(e.target.value)}
-                    className="w-full h-24 bg-[#1e1e1e] border border-[#3c3c3c] rounded p-2 text-xs font-mono focus:outline-none focus:border-blue-500/50 resize-y"
+                    className="w-full h-24 bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] rounded p-2 text-xs font-mono focus:outline-none focus:border-blue-500/50 resize-y"
                     placeholder="Enter expected output (optional)..."
                 />
             </div>
@@ -202,8 +202,8 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
 
                     {status === 'failed' && (
                         <div className="space-y-1">
-                            <span className="text-[10px] text-[#969696] uppercase">Your Output:</span>
-                            <pre className="text-xs font-mono bg-[#1e1e1e] p-2 rounded overflow-x-auto text-red-200">
+                            <span className="text-[10px] text-[var(--text-secondary)] uppercase">Your Output:</span>
+                            <pre className="text-xs font-mono bg-[var(--bg-input)] p-2 rounded overflow-x-auto text-red-500">
                                 {actualOutput}
                             </pre>
                         </div>
@@ -211,8 +211,8 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
 
                     {status === 'success' && (
                         <div className="space-y-1">
-                            <span className="text-[10px] text-[#969696] uppercase">Output:</span>
-                            <pre className="text-xs font-mono bg-[#1e1e1e] p-2 rounded overflow-x-auto text-green-200">
+                            <span className="text-[10px] text-[var(--text-secondary)] uppercase">Output:</span>
+                            <pre className="text-xs font-mono bg-[var(--bg-input)] p-2 rounded overflow-x-auto text-green-500">
                                 {actualOutput}
                             </pre>
                         </div>
@@ -220,8 +220,8 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
 
                     {error && (
                         <div className="space-y-1 pt-1 border-t border-white/10">
-                            <span className="text-[10px] text-[#969696] uppercase">Error Log:</span>
-                            <pre className="text-xs font-mono bg-[#1e1e1e] p-2 rounded overflow-x-auto text-yellow-200 whitespace-pre-wrap">
+                            <span className="text-[10px] text-[var(--text-secondary)] uppercase">Error Log:</span>
+                            <pre className="text-xs font-mono bg-[var(--bg-input)] p-2 rounded overflow-x-auto text-yellow-500 whitespace-pre-wrap">
                                 {error}
                             </pre>
                         </div>

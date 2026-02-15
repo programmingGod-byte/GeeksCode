@@ -13,6 +13,7 @@ const { LucideEthernetPort } = require('lucide-react');
 
 let mainWindow;
 let ptyProcess = null;
+let ptyExitListener = null;
 
 // Global AI state
 let llama = null;
@@ -44,37 +45,44 @@ const NOMIC_FILENAME = "nomic-embed-text-v1.5.Q4_K_M.gguf";
 
 // ... existing code ...  
 
-ipcMain.handle('ai:delete-model', async () => {
-  const deepseekPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
-  const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+ipcMain.handle('ai:delete-model', async (_, modelId) => {
   let success = true;
 
   try {
-    if (fs.existsSync(deepseekPath)) {
-      fs.unlinkSync(deepseekPath);
+    if (modelId) {
+      // Delete specific model
+      const m = AI_MODELS[modelId];
+      if (m) {
+        const filePath = path.join(app.getPath('userData'), m.filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } else if (modelId === 'nomic') {
+        const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+        if (fs.existsSync(nomicPath)) {
+          fs.unlinkSync(nomicPath);
+        }
+      }
+    } else {
+      // Delete ALL (Legacy fallback)
+      for (const m of Object.values(AI_MODELS)) {
+        const filePath = path.join(app.getPath('userData'), m.filename);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
+      const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+      if (fs.existsSync(nomicPath)) fs.unlinkSync(nomicPath);
     }
-  } catch (e) {
-    console.error('Error deleting deepseek model:', e);
-    success = false;
-  }
 
-  try {
-    if (fs.existsSync(nomicPath)) {
-      fs.unlinkSync(nomicPath);
-    }
-  } catch (e) {
-    console.error('Error deleting nomic model:', e);
-    success = false;
-  }
-
-  if (success) {
-    model = null; // Reset global model reference
-    context = null; // Reset global context reference
-    sessions.clear(); // Clear all sessions
-    globalAIInitPromise = null; // Allow re-init
+    // Reset AI state if anything was deleted
+    model = null;
+    context = null;
+    sessions.clear();
+    globalAIInitPromise = null;
     return true;
+  } catch (e) {
+    console.error('Error in ai:delete-model:', e);
+    return false;
   }
-  return false;
 });
 
 function createWindow() {
@@ -101,6 +109,8 @@ function createWindow() {
   }
 
   mainWindow = new BrowserWindow(windowOptions);
+
+  mainWindow.maximize();
 
   // In dev mode, load from Vite dev server; in production load the built output
   const isDev = !app.isPackaged;
@@ -133,6 +143,25 @@ function createWindow() {
             }
           },
         },
+        {
+          label: 'Open Folder...',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('open-folder');
+            }
+          },
+        },
+        {
+          label: 'Close Folder',
+          accelerator: 'CmdOrCtrl+Shift+W',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('close-folder');
+            }
+          },
+        },
+        { type: "separator" },
         {
           label: 'Codeforces Settings',
           click: () => {
@@ -437,6 +466,28 @@ ipcMain.handle('fs:createFolder', async (_, folderPath) => {
   }
 });
 
+ipcMain.handle('fs:deleteFile', async (_, filePath) => {
+  try {
+    if (!fs.existsSync(filePath)) return false;
+    fs.unlinkSync(filePath);
+    return true;
+  } catch (e) {
+    console.error('fs:deleteFile error', e);
+    return false;
+  }
+});
+
+ipcMain.handle('fs:deleteFolder', async (_, folderPath) => {
+  try {
+    if (!fs.existsSync(folderPath)) return false;
+    fs.rmSync(folderPath, { recursive: true, force: true });
+    return true;
+  } catch (e) {
+    console.error('fs:deleteFolder error', e);
+    return false;
+  }
+});
+
 // ─── IPC: RAG Agent ─────────────────────────────────────────
 ipcMain.handle('rag:index', async (event, projectFiles) => {
   // Ensure RAG service is initialized with model if possible
@@ -600,8 +651,35 @@ ipcMain.handle('shell:run', async (_, command, cwd) => {
 });
 
 // ─── IPC: Terminal (node-pty) ───────────────────────────────
-ipcMain.handle('terminal:create', (_, cols, rows) => {
+// Fix: Ensure spawn-helper has execution permissions on macOS
+if (process.platform === 'darwin') {
+  try {
+    const ptyPath = require.resolve('node-pty');
+    const ptyDir = path.dirname(ptyPath);
+    const arch = process.arch;
+    const spawnHelperPath = path.join(ptyDir, '..', 'prebuilds', `darwin-${arch}`, 'spawn-helper');
+
+    if (fs.existsSync(spawnHelperPath)) {
+      const stats = fs.statSync(spawnHelperPath);
+      // Check if not executable (0o111 means --x--x--x)
+      if (!(stats.mode & 0o111)) {
+        console.log(`Fixing permissions for node-pty spawn-helper: ${spawnHelperPath}`);
+        fs.chmodSync(spawnHelperPath, 0o755);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to check/fix node-pty spawn-helper permissions:', err);
+  }
+}
+
+let currentWorkspacePath = os.homedir();
+
+function createTerminalProcess(cols, rows) {
   if (ptyProcess) {
+    if (ptyExitListener) {
+      ptyExitListener.dispose();
+      ptyExitListener = null;
+    }
     ptyProcess.kill();
   }
 
@@ -611,7 +689,7 @@ ipcMain.handle('terminal:create', (_, cols, rows) => {
     name: 'xterm-256color',
     cols: cols || 80,
     rows: rows || 24,
-    cwd: os.homedir(),
+    cwd: currentWorkspacePath,
     env: process.env,
   });
 
@@ -621,6 +699,17 @@ ipcMain.handle('terminal:create', (_, cols, rows) => {
     }
   });
 
+  ptyExitListener = ptyProcess.onExit(() => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('terminal:exit');
+    }
+    ptyProcess = null;
+    ptyExitListener = null;
+  });
+}
+
+ipcMain.handle('terminal:create', (_, cols, rows) => {
+  createTerminalProcess(cols, rows);
   return true;
 });
 
@@ -641,23 +730,9 @@ ipcMain.on('terminal:resize', (_, cols, rows) => {
 });
 
 ipcMain.on('terminal:cwd', (_, cwd) => {
-  // Kill existing and respawn in new cwd
-  if (ptyProcess) {
-    ptyProcess.kill();
-  }
-  const shell = process.platform === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/zsh';
-  ptyProcess = pty.spawn(shell, [], {
-    name: 'xterm-256color',
-    cols: 80,
-    rows: 24,
-    cwd: cwd,
-    env: process.env,
-  });
-  ptyProcess.onData((data) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('terminal:data', data);
-    }
-  });
+  currentWorkspacePath = cwd;
+  // Re-create terminal in new CWD
+  createTerminalProcess(80, 24);
 });
 
 // ─── AI Integration ─────────────────────────────────────────
@@ -750,7 +825,7 @@ async function initAIModel(modelPath, sessionId = 'default', createSession = tru
         console.log("AI: Initializing Llama backend...");
 
         // Conservative initialization: CPU-only to avoid SIGILL/CUDA issues
-        let currentLlama = await getLlama({ gpu: false });
+        let currentLlama = await getLlama({ gpu: 'auto' });
         llama = currentLlama;
 
         console.log("AI: Backend initialized. Loading model...");
@@ -897,7 +972,15 @@ ipcMain.handle('ai:set-model', (_, modelId) => {
 });
 
 ipcMain.handle('ai:get-models', () => {
-  return AI_MODELS;
+  const result = {};
+  for (const [id, m] of Object.entries(AI_MODELS)) {
+    const filePath = path.join(app.getPath('userData'), m.filename);
+    result[id] = {
+      ...m,
+      downloaded: fs.existsSync(filePath)
+    };
+  }
+  return result;
 });
 
 ipcMain.handle('ai:ask', async (event, userPrompt, sessionId = 'default') => {

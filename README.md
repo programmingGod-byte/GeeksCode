@@ -3,6 +3,7 @@
 GeeksCode is a high-performance, feature-rich code editor built with Electron, React, and Node.js. It is designed for competitive programmers and developers who require a streamlined, AI-integrated workflow. This editor combines a modern UI with powerful tools like an integrated terminal, Codeforces problem explorer, AI-powered assistance, and automated test case generation.
 
 ### Contributors:
+- Satvik Garg (B24219)
 - Pranab Pandey (B24148)
 - Shivam Kumar (B24220)
 - Shivang Tripathi (B24221)
@@ -10,34 +11,29 @@ GeeksCode is a high-performance, feature-rich code editor built with Electron, R
 ## Key Features
 
 ### Core Functionality
-
 - **Monaco Editor Integration**: Full-featured code editing experience with syntax highlighting and intelligent code completion.
 - **Integrated Terminal**: Seamlessly run commands and scripts without leaving the editor.
 - **File Explorer**: Efficiently manage your project files and folders.
 - **Tab Management**: Work on multiple files simultaneously with an intuitive tab system.
 
 ### Competitive Programming Tools
-
 - **Codeforces Integration**: Browse, filter, and view Codeforces problems directly within the sidebar.
 - **Problem Viewer**: Read problem statements and submit solutions.
 - **Quick Open**: Rapidly navigate between files and symbols.
 
 ### AI & Automation
-
 - **AI Chat Assistant**: Built-in AI chat for code explanations, debugging, and generation.
 - **RAG (Retrieval-Augmented Generation)**: Context-aware AI responses based on your project codebase.
 - **Test Case Generator**: Automatically generate input/output test cases for your code using AI. Supports custom constraints (e.g., Max Input Length).
 - **Code Runner**: Execute your code instantly with a single click.
 
 ### Advanced Search
-
-- **Cpp/Header Search**: specialized search panel to quickly find text within `.cpp`, `.h`, `.hpp`, and `.c` files.
-- **Real-time Filtering**: fast search results with file preview snippets.
+- **Cpp/Header Search**: Specialized search panel to quickly find text within `.cpp`, `.h`, `.hpp`, and `.c` files.
+- **Real-time Filtering**: Fast search results with file preview snippets.
 
 ## Installation
 
 Ensure you have Node.js and Yarn installed on your system.
-
 ```bash
 # Clone the repository
 git clone https://github.com/programmingGod-byte/GeeksCode
@@ -52,7 +48,6 @@ yarn install
 ## Running the Application
 
 To start the application in development mode:
-
 ```bash
 yarn start
 ```
@@ -62,7 +57,6 @@ This command concurrently runs the Vite development server and the Electron appl
 ## Building for Production
 
 To create a production build for your operating system:
-
 ```bash
 # General build
 yarn build
@@ -70,6 +64,63 @@ yarn build
 # Linux AppImage build
 yarn build:linux
 ```
+
+## 🤖 Custom AI Models
+
+### Create Your Own Models with Smolify.ai
+
+GeeksCode's AI capabilities can be enhanced with custom models. You can use [Smolify.ai](https://smolify.ai) to create specialized, lightweight models tailored to your specific coding needs.
+
+**Example Models We've Created:**
+
+1. **Code Helper Model**: Optimized for code assistance and debugging
+   - 🔗 [smolified-code-helper-model](https://huggingface.co/programmerGodbyte/smolified-code-helper-model)
+
+2. **Text-to-Code Model**: Specialized for converting natural language descriptions into code
+   - 🔗 [smolified-tiny-text-to-code](https://huggingface.co/programmerGodbyte/smolified-tiny-text-to-code)
+
+### How to Use Custom Models:
+
+1. Visit [Smolify.ai](https://smolify.ai) to create your custom model
+2. Train the model on your specific use case (competitive programming, algorithm implementation, etc.)
+3. Export and integrate the model with GeeksCode's AI assistant
+4. Enjoy personalized AI assistance tailored to your coding style and requirements
+
+**Benefits of Custom Models:**
+- Faster inference times with smaller model sizes
+- Domain-specific knowledge (e.g., competitive programming patterns)
+- Reduced API costs by running models locally
+- Privacy-focused solution for sensitive codebases
+
+## ⚠️ Important Security Notice
+
+### Antivirus & Security Software Warning
+
+**Before running GeeksCode, you may need to configure your antivirus or security software:**
+
+#### Windows Users:
+- Windows Defender or third-party antivirus software may flag the application due to:
+  - Terminal emulation capabilities (node-pty)
+  - File system access
+  - Code execution features
+- **Recommended actions:**
+  - Add GeeksCode installation folder to your antivirus exclusion list
+  - Temporarily disable real-time protection during installation/first run
+  - If Windows SmartScreen blocks the app, click "More info" → "Run anyway"
+
+#### macOS Users:
+- Gatekeeper may prevent the app from opening with a message: *"GeeksCode cannot be opened because it is from an unidentified developer"*
+- **Recommended actions:**
+  - Right-click the app → Select "Open" → Click "Open" in the dialog
+  - Or: System Preferences → Security & Privacy → Click "Open Anyway"
+  - You may need to temporarily disable Gatekeeper: `sudo spctl --master-disable` (re-enable after: `sudo spctl --master-enable`)
+
+#### Linux Users:
+- Generally fewer issues, but ensure the AppImage has execute permissions: `chmod +x GeeksCode.AppImage`
+
+**Why these warnings occur:** GeeksCode requires elevated permissions for terminal access, file operations, and code compilation/execution - features essential for a development environment. These capabilities can trigger security software designed to prevent unauthorized system access.
+
+**Safety Note:** Always download GeeksCode from the official GitHub repository to ensure you're running authentic, unmodified code.
 
 ## Project Structure
 
@@ -87,7 +138,12 @@ yarn build:linux
 - **Monaco Editor**: The code editor that powers VS Code.
 - **Tailwind CSS**: Utility-first CSS framework for styling.
 - **Node-pty**: Terminal emulation.
+- **Smolify.ai**: Custom AI model creation and optimization.
 
 ## License
 
 This project is licensed under the MIT License.
+
+---
+
+**Need Help?** If you encounter issues with antivirus software or application permissions, please open an issue on our GitHub repository with details about your operating system and security software.
