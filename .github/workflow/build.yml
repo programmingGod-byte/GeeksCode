@@ -2,9 +2,8 @@ name: Build and Release GeeksCode
 
 on:
   push:
-    tags:
-      - 'v*' # Triggers on tags starting with 'v', e.g., v1.0.1
-
+    branches:
+      - shivam # This triggers the build every time you push to the shivam branch
 jobs:
   release:
     runs-on: ${{ matrix.os }}
@@ -22,7 +21,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'yarn'
+          cache: "yarn"
 
       - name: Install Dependencies
         run: yarn install --frozen-lockfile
