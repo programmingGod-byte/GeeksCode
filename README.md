@@ -65,6 +65,33 @@ yarn build
 yarn build:linux
 ```
 
+## 🤖 Custom AI Models
+
+### Create Your Own Models with Smolify.ai
+
+GeeksCode's AI capabilities can be enhanced with custom models. You can use [Smolify.ai](https://smolify.ai) to create specialized, lightweight models tailored to your specific coding needs.
+
+**Example Models We've Created:**
+
+1. **Code Helper Model**: Optimized for code assistance and debugging
+   - 🔗 [smolified-code-helper-model](https://huggingface.co/programmerGodbyte/smolified-code-helper-model)
+
+2. **Text-to-Code Model**: Specialized for converting natural language descriptions into code
+   - 🔗 [smolified-tiny-text-to-code](https://huggingface.co/programmerGodbyte/smolified-tiny-text-to-code)
+
+### How to Use Custom Models:
+
+1. Visit [Smolify.ai](https://smolify.ai) to create your custom model
+2. Train the model on your specific use case (competitive programming, algorithm implementation, etc.)
+3. Export and integrate the model with GeeksCode's AI assistant
+4. Enjoy personalized AI assistance tailored to your coding style and requirements
+
+**Benefits of Custom Models:**
+- Faster inference times with smaller model sizes
+- Domain-specific knowledge (e.g., competitive programming patterns)
+- Reduced API costs by running models locally
+- Privacy-focused solution for sensitive codebases
+
 ## ⚠️ Important Security Notice
 
 ### Antivirus & Security Software Warning
@@ -89,7 +116,7 @@ yarn build:linux
   - You may need to temporarily disable Gatekeeper: `sudo spctl --master-disable` (re-enable after: `sudo spctl --master-enable`)
 
 #### Linux Users:
-- Generally fewer issues, but ensure the .deb has execute permissions: `chmod +x GeeksCode.deb`
+- Generally fewer issues, but ensure the AppImage has execute permissions: `chmod +x GeeksCode.AppImage`
 
 **Why these warnings occur:** GeeksCode requires elevated permissions for terminal access, file operations, and code compilation/execution - features essential for a development environment. These capabilities can trigger security software designed to prevent unauthorized system access.
 
@@ -111,6 +138,7 @@ yarn build:linux
 - **Monaco Editor**: The code editor that powers VS Code.
 - **Tailwind CSS**: Utility-first CSS framework for styling.
 - **Node-pty**: Terminal emulation.
+- **Smolify.ai**: Custom AI model creation and optimization.
 
 ## License
 
