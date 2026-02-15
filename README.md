@@ -89,7 +89,7 @@ yarn build:linux
   - You may need to temporarily disable Gatekeeper: `sudo spctl --master-disable` (re-enable after: `sudo spctl --master-enable`)
 
 #### Linux Users:
-- Generally fewer issues, but ensure the AppImage has execute permissions: `chmod +x GeeksCode.AppImage`
+- Generally fewer issues, but ensure the .deb has execute permissions: `chmod +x GeeksCode.deb`
 
 **Why these warnings occur:** GeeksCode requires elevated permissions for terminal access, file operations, and code compilation/execution - features essential for a development environment. These capabilities can trigger security software designed to prevent unauthorized system access.
 
