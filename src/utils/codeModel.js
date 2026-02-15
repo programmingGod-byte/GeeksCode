@@ -76,10 +76,10 @@ class CodeModel {
             });
 
             const prom = `Complete this C++ code. Replace every !@#$("...") marker with the code described inside it.
-Keep ALL existing code, variables, and values unchanged. Only replace the markers.
-Output the complete final code only.
+                        Keep ALL existing code, variables, and values unchanged. Only replace the markers.
+                        Output the complete final code only.
 
-${code}`;
+                        ${code}`;
             const response = await session.prompt(prom);
 
             if (!sequence.disposed) {
