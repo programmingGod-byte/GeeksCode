@@ -32,6 +32,18 @@ const icons = [
         ),
     },
     {
+        id: 'testgen',
+        title: 'Generate Test Cases',
+        svg: (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 3h6" />
+                <path d="M10 3v5.4c0 .3-.1.6-.3.8L6 14c-1.3 1.5-.5 3.8 1.4 4.2.5.1 1 .1 1.6.1h6c.6 0 1.1 0 1.6-.1 1.9-.4 2.7-2.7 1.4-4.2l-3.7-4.8c-.2-.2-.3-.5-.3-.8V3" />
+                <line x1="12" y1="13" x2="12" y2="17" />
+                <line x1="10" y1="15" x2="14" y2="15" />
+            </svg>
+        ),
+    },
+    {
         id: 'run',
         title: 'Run and Debug',
         svg: (

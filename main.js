@@ -8,6 +8,7 @@ const crypto = require('crypto');
 
 const ragService = require('./src/utils/ragService');
 const codeModel = require('./src/utils/codeModel');
+const testCaseModel = require('./src/utils/testCaseModel');
 const { LucideEthernetPort } = require('lucide-react');
 
 let mainWindow;
@@ -223,6 +224,42 @@ function ParseCode(code) {
   }
   return results
 }
+ipcMain.handle('parsed-code', async (event, code) => {
+  let prompts = ParseCode(code)
+  let finalCppCode;
+  if (prompts.length !== 0) {
+    const modelPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
+    await codeModel.init(modelPath);
+    finalCppCode = await codeModel.query(code);
+    console.log(finalCppCode);
+  } else {
+    finalCppCode = code;
+  }
+  return {
+    success: true,
+    cppCode: finalCppCode
+  }
+})
+
+ipcMain.handle('generate-testcases', async (event, code, count) => {
+  try {
+    const modelPath = path.join(app.getPath('userData'), 'deepseek-1.3b.gguf');
+    await testCaseModel.init(modelPath);
+    const testCases = await testCaseModel.generate(code, count);
+    console.log('Generated test cases:', testCases);
+    return {
+      success: true,
+      testCases: testCases
+    };
+  } catch (error) {
+    console.error('Test case generation failed:', error);
+    return {
+      success: false,
+      testCases: [],
+      error: error.message
+    };
+  }
+})
 
 // Global tracker for autocomplete specific sequence (to allow killing it for higher priority tasks)
 let globalAutocompleteSequence = null;

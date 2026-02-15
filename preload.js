@@ -69,5 +69,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteModel: () => ipcRenderer.invoke('ai:delete-model'),
 });
 contextBridge.exposeInMainWorld('run', {
-    submit: (a) => ipcRenderer.invoke('submit-code', a)
+    submit: (a) => ipcRenderer.invoke('submit-code', a),
+    parse: (a) => ipcRenderer.invoke('parsed-code', a),
+    generateTestCases: (code, count) => ipcRenderer.invoke('generate-testcases', code, count)
 })
