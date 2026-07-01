@@ -18,12 +18,7 @@ class RagService {
         this.modelPath = modelPath;
         const indexPath = path.join(userDataPath, 'vectra_index');
         this.statePath = path.join(userDataPath, 'rag_state.json');
-<<<<<<< HEAD
         
-=======
-
-        // Load indexed files state
->>>>>>> origin/main
         this._loadState();
 
         if (!fs.existsSync(indexPath)) {

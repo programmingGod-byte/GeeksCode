@@ -48,7 +48,6 @@ ipcMain.handle('ai:delete-model', async (_, modelId) => {
 
   try {
     if (modelId) {
-      // Delete specific model
       const m = AI_MODELS[modelId];
       if (m) {
         const filePath = path.join(app.getPath('userData'), m.filename);
@@ -62,7 +61,6 @@ ipcMain.handle('ai:delete-model', async (_, modelId) => {
         }
       }
     } else {
-      // Delete ALL (Legacy fallback)
       for (const m of Object.values(AI_MODELS)) {
         const filePath = path.join(app.getPath('userData'), m.filename);
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
@@ -108,12 +106,6 @@ function createWindow() {
 
   mainWindow = new BrowserWindow(windowOptions);
 
-<<<<<<< HEAD
-=======
-  mainWindow.maximize();
-
-  // In dev mode, load from Vite dev server; in production load the built output
->>>>>>> origin/main
   const isDev = !app.isPackaged;
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
