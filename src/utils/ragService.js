@@ -11,7 +11,7 @@ class RagService {
         this.modelPath = null;
         this.statePath = null;
         this.indexedFiles = new Set();
-        this.isProcessing = false; // Simple lock
+        this.isProcessing = false; 
     }
 
     async init(userDataPath, modelPath) {
@@ -19,7 +19,6 @@ class RagService {
         const indexPath = path.join(userDataPath, 'vectra_index');
         this.statePath = path.join(userDataPath, 'rag_state.json');
         
-        // Load indexed files state
         this._loadState();
         
         if (!fs.existsSync(indexPath)) {
@@ -28,7 +27,6 @@ class RagService {
 
         try {
             this.index = new LocalIndex(indexPath);
-            // Check if index is valid by calling a method that reads it
             const exists = await this.index.isIndexCreated();
             if (!exists) {
                 await this.index.createIndex();
@@ -49,7 +47,6 @@ class RagService {
             }
         }
 
-        // Initialize embedding model
         await this._initModel();
         console.log("RAG Service Initialized");
     }
@@ -91,12 +88,10 @@ class RagService {
 
         try {
             const { getLlama } = await import("node-llama-cpp");
-            // Disable GPU explicitly to prevent Vulkan/CUDA compatibility crashes
             const llama = await getLlama({ gpu: false }); 
             
             this.model = await llama.loadModel({
                 modelPath: this.modelPath,
-                // gpuLayers: 0 is correct for model load, but we also ensure backend is CPU
             });
 
             this.context = await this.model.createEmbeddingContext();
@@ -109,12 +104,6 @@ class RagService {
     async getEmbeddings(text) {
         if (!this.context) await this._initModel();
         if (!this.context) throw new Error("Embedding context not initialized");
-        
-        // Nomic specific prefix for queries/documents if needed, 
-        // strictly speaking v1.5 might handle it, but adding "search_document: " is often recommended for docs
-        // and "search_query: " for queries.
-        // For simplicity, we'll try raw text first or standard prefix if we see quality issues.
-        // Nomic v1.5 usually expects "search_document: " for indexing.
         const embedding = await this.context.getEmbeddingFor(text);
         return embedding.vector;
     }
@@ -197,7 +186,6 @@ class RagService {
         
         try {
             if (!files || !Array.isArray(files)) return;
-            // Filter out already indexed files
             const filesToIndex = files.filter(f => !this.indexedFiles.has(f.path));
             console.log(`RAG: Indexing ${filesToIndex.length} new project files (skipped ${files.length - filesToIndex.length})...`);
             
@@ -231,9 +219,8 @@ class RagService {
                     // Mark as indexed
                     this.indexedFiles.add(file.path);
                     processed++;
-                    consecutiveErrors = 0; // Reset on success
+                    consecutiveErrors = 0; 
                     
-                    // Periodically save state (every 10 files)
                     if (processed % 10 === 0) this._saveState();
                     
                     // Prevent UI freeze / heavy load

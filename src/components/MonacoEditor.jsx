@@ -3,7 +3,6 @@ import Editor, { loader } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
 import { Zap } from 'lucide-react';
 
-// Configure monaco-editor to use local node_modules
 loader.config({ monaco });
 
 export default function MonacoEditor({
@@ -14,16 +13,15 @@ export default function MonacoEditor({
     onContentChange,
     onSave,
     editorRef,
-    isAICompleting, // New prop
+    isAICompleting,
 }) {
     const monacoRef = useRef(null);
 
     const handleEditorDidMount = useCallback((editor, mon) => {
         monacoRef.current = mon;
         editorRef.current = editor;
-        window.monaco = mon; // Expose for external use (like executeEdits)
+        window.monaco = mon;
 
-        // Define dark theme
         mon.editor.defineTheme('vs-dark', {
             base: 'vs-dark',
             inherit: true,
@@ -34,7 +32,6 @@ export default function MonacoEditor({
             },
         });
 
-        // Define Monokai theme
         mon.editor.defineTheme('monokai-dark', {
             base: 'vs-dark',
             inherit: true,
@@ -58,17 +55,14 @@ export default function MonacoEditor({
 
         mon.editor.setTheme(theme);
 
-        // Cursor position tracking
         editor.onDidChangeCursorPosition((e) => {
             onCursorChange(e.position.lineNumber, e.position.column);
         });
 
-        // Shared AI Completion Logic moved to editor mount but registration only once
         const getAICompletion = async (model, position, useFullContext = false) => {
             let prefix, suffix;
-            
+
             if (useFullContext) {
-                // Send entire file for maximum context (Ctrl+J)
                 prefix = model.getValueInRange({
                     startLineNumber: 1,
                     startColumn: 1,
@@ -79,10 +73,9 @@ export default function MonacoEditor({
                     startLineNumber: position.lineNumber,
                     startColumn: position.column,
                     endLineNumber: model.getLineCount(),
-                    endColumn: 1000 // Safely capture end of line
+                    endColumn: 1000
                 });
             } else {
-                // Send limited context for automatic ghost text
                 prefix = model.getValueInRange({
                     startLineNumber: Math.max(1, position.lineNumber - 30),
                     startColumn: 1,
@@ -96,7 +89,6 @@ export default function MonacoEditor({
                     endColumn: 1,
                 });
             }
-
             return await window.electronAPI.completeAI(`${prefix}<CURSOR>${suffix}`);
         };
 
@@ -104,13 +96,10 @@ export default function MonacoEditor({
             const lineContent = model.getLineContent(position.lineNumber);
             const textBefore = lineContent.substring(0, position.column - 1);
             const textAfter = lineContent.substring(position.column - 1);
-            
-            // Check if we are inside ~(" ... ")
+
             const hasStart = textBefore.includes('~("');
             const hasEnd = textAfter.includes('")');
-            
-            // If we see the start but no end, or if the cursor is between them
-            // A more robust check for current line:
+
             const promptRegex = /~\("([^"]*)$/;
             return promptRegex.test(textBefore);
         };
@@ -123,12 +112,10 @@ export default function MonacoEditor({
 
             let ghostTextTimer = null;
             languages.forEach(lang => {
-                // 1. Ghost Text (Inline Completions) - Uses limited context
                 mon.languages.registerInlineCompletionsProvider(lang, {
                     provideInlineCompletions: async (model, position, context, token) => {
                         if (ghostTextTimer) clearTimeout(ghostTextTimer);
 
-                        // Suppress ghost text if we are typing a prompt or if AI is already working
                         if (isAICompleting || isInsidePrompt(model, position)) {
                             return { items: [] };
                         }
@@ -136,7 +123,7 @@ export default function MonacoEditor({
                         return new Promise((resolve) => {
                             ghostTextTimer = setTimeout(async () => {
                                 if (token.isCancellationRequested) return resolve({ items: [] });
-                                
+
                                 const completion = await getAICompletion(model, position, false);
                                 if (!completion || completion.trim().length === 0) return resolve({ items: [] });
 
@@ -146,28 +133,26 @@ export default function MonacoEditor({
                                         range: new mon.Range(position.lineNumber, position.column, position.lineNumber, position.column)
                                     }]
                                 });
-                            }, 800); 
+                            }, 800);
                         });
-                    }
+                    },
+                    freeInlineCompletions: () => { }
                 });
 
-                // 2. IntelliSense Dropdown - Uses full context
                 mon.languages.registerCompletionItemProvider(lang, {
-                    // Removed space ' ' from trigger characters as it's too aggressive
-                    triggerCharacters: ['.', '>', ':', '('],
+                    triggerCharacters: ['.', '<', ':', '('],
                     provideCompletionItems: async (model, position, context, token) => {
-                        // Suppress items if AI is already working or we are inside a prompt
                         if (isAICompleting || isInsidePrompt(model, position)) {
                             return { suggestions: [] };
                         }
 
-                        if (context.triggerKind !== mon.languages.CompletionTriggerKind.Invoke && 
+                        if (context.triggerKind !== mon.languages.CompletionTriggerKind.Invoke &&
                             !context.triggerCharacter) {
                             return { suggestions: [] };
                         }
 
-                        // Use full context for explicit requests (Ctrl+J)
                         const completion = await getAICompletion(model, position, true);
+                        console.log(completion)
                         if (!completion) return { suggestions: [] };
 
                         return {
@@ -184,17 +169,13 @@ export default function MonacoEditor({
             });
         }
 
-        // Ctrl/Cmd + S to save
         editor.addCommand(mon.KeyMod.CtrlCmd | mon.KeyCode.KeyS, () => {
             onSave();
         });
-
-        // Ctrl + J to trigger suggestions
         editor.addCommand(mon.KeyMod.CtrlCmd | mon.KeyCode.KeyJ, () => {
             editor.trigger('keyboard', 'editor.action.triggerSuggest', {});
         });
 
-        // Global override for Ctrl+J which is often hijacked by browser (Downloads)
         const handleGlobalKeyDown = (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'j') {
                 e.preventDefault();
@@ -209,14 +190,12 @@ export default function MonacoEditor({
         };
     }, [onCursorChange, onSave, editorRef]);
 
-    // Sync theme when it changes
     useEffect(() => {
         if (monacoRef.current) {
             monacoRef.current.editor.setTheme(theme);
         }
     }, [theme]);
 
-    // Find active tab
     const currentTab = tabs.find((t) => t.filePath === activeTab);
 
     if (!currentTab) return null;
@@ -259,7 +238,7 @@ export default function MonacoEditor({
                     renderLineHighlight: 'all',
                     matchBrackets: 'always',
                     suggest: { showWords: true },
-                    inlineSuggest: { enabled: true }, // Enable inline suggestions
+                    inlineSuggest: { enabled: true },
                 }}
             />
         </div>

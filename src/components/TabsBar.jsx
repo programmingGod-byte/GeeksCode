@@ -38,7 +38,6 @@ export default function TabsBar({ tabs, activeTab, onSwitchTab, onCloseTab, onAn
             setLoadingRun(false);
         }
     }
-
     const handleAnalyze = async () => {
         setLoadingAnalyze(true);
         try {

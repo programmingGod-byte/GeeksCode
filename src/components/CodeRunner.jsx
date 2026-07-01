@@ -44,7 +44,6 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
             const cppPath = result.cppPath;
             const dirPath = cppPath.substring(0, cppPath.lastIndexOf('/'));
 
-            // Output the executable alongside the original source file
             const isWin = navigator.platform.startsWith('Win');
             const origExePath = isWin
                 ? activeFile.replace('.cpp', '.exe')
@@ -58,12 +57,10 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
                 setError(compileResult.stderr || "Compilation failed");
                 setStatus('error');
                 setIsRunning(false);
-                // Cleanup temp file
                 await window.electronAPI.runCommand(`rm -f "${cppPath}"`, dirPath);
                 return;
             }
 
-            // Refresh file explorer to show the new executable
             if (onRefresh) onRefresh();
 
             let runCmd;
@@ -80,7 +77,6 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
             const endTime = performance.now();
             setRuntime(endTime - startTime);
 
-            // Cleanup temp cpp only — keep the executable alongside the source
             await window.electronAPI.runCommand(`rm -f "${cppPath}"`, dirPath);
             if (input.trim()) {
                 await window.electronAPI.runCommand(`rm -f ${dirPath}/input_*.txt`, dirPath);
@@ -116,8 +112,6 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
 
     return (
         <div className="flex flex-col h-full bg-[#252526] text-[#cccccc] p-4 space-y-4 overflow-y-auto custom-scrollbar">
-
-            {/* Header */}
             <div className="flex justify-between items-center border-b border-[#3c3c3c] pb-2">
                 <div className="flex items-center space-x-2 text-sm font-bold uppercase tracking-wider">
                     <Terminal size={16} className="text-blue-400" />
@@ -130,7 +124,6 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
                 )}
             </div>
 
-            {/* Input Section */}
             <div className="space-y-2">
                 <label className="text-xs font-semibold text-[#969696] uppercase">Input</label>
                 <textarea
@@ -141,7 +134,6 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
                 />
             </div>
 
-            {/* Expected Output Section */}
             <div className="space-y-2">
                 <label className="text-xs font-semibold text-[#969696] uppercase">Expected Output</label>
                 <textarea
@@ -152,7 +144,6 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
                 />
             </div>
 
-            {/* Run Button */}
             <button
                 onClick={() => {
                     handleRun(code)
@@ -176,7 +167,6 @@ export default function CodeRunner({ activeFile, activeFileContent, code, onShow
                 )}
             </button>
 
-            {/* Results Section */}
             {(status !== 'idle' && status !== 'running' || error) && (
                 <div className={`rounded-lg border p-3 space-y-2 ${status === 'success' ? 'bg-green-500/10 border-green-500/30' :
                     status === 'failed' ? 'bg-red-500/10 border-red-500/30' :

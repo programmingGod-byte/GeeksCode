@@ -38,7 +38,7 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
     const handleMentionSelect = (file) => {
         if (mentionSearch === null) return;
         const textBefore = input.substring(0, mentionSearch);
-        const textAfter = input.substring(input.length); // usually just empty if at end
+        const textAfter = input.substring(input.length); 
         setInput(textBefore + `@${file.name} `);
         setMentionSearch(null);
     };
@@ -49,20 +49,18 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
         let userPrompt = input;
         const userMsg = input;
         setInput('');
-
-        // RAG Agent trigger: ~("request") or ~('request')
         const ragMatch = userMsg.match(/~[\s]*\(['"]([^'"]+)['"]\)/);
         if (ragMatch && window.electronAPI.rag) {
             const query = ragMatch[1];
             setSessions(prev => prev.map(s => 
                 s.id === activeSessionId 
-                    ? { ...s, messages: [...s.messages, { role: 'user', content: userMsg }, { role: 'ai', content: `🔍 **Editor Agent**: Searching for relevant code patterns for "${query}"...` }] }
+                    ? { ...s, messages: [...s.messages, { role: 'user', content: userMsg }, { role: 'ai', content: `**Editor Agent**: Searching for relevant code patterns for "${query}"...` }] }
                     : s
             ));
             
             setLoading(true);
             const searchResults = await window.electronAPI.rag.query(query);
-            let contextText = "🤖 **Editor Agent Context (RAG)**:\n";
+            let contextText = "**Editor Agent Context (RAG)**:\n";
             if (searchResults.length > 0) {
                 searchResults.forEach(res => {
                     contextText += `\n--- Relevant File: ${res.name} ---\n${res.content}\n`;
@@ -73,17 +71,22 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
             
             userPrompt = `${contextText}\n**User specialized request**: ${query}\n\nPlease perform the requested code changes or explanation based on the retrieved context above.`;
         } else {
-            // Context injection for @mentions
             const mentions = userMsg.match(/@([\w\.\-]+)/g);
             if (mentions && projectFiles) {
+                console.log(mentions)
                 const fileName = mentions[0].substring(1);
                 const file = projectFiles.find(f => f.name === fileName);
-                if (file && (userMsg.toLowerCase().includes('test') || userMsg.toLowerCase().includes('error') || userMsg.toLowerCase().includes('why'))) {
+                if (file && (userMsg.toLowerCase().includes('test') || userMsg.toLowerCase().includes('error') || userMsg.toLowerCase().includes('why') ||
+            userMsg.toLowerCase().includes("debug") || userMsg.toLowerCase().includes("errors"))) {
+                    setSessions(prev => prev.map(s => 
+                        s.id === activeSessionId 
+                            ? { ...s, messages: [...s.messages, { role: 'user', content: userMsg }] }
+                            : s
+                    ));
                     handleAgenticFlow(file, userMsg);
                     return;
                 }
                 
-                // Standard mention handling
                 let contextText = "Context from mentioned files:\n";
                 for (const mention of mentions) {
                     const fName = mention.substring(1);
@@ -97,10 +100,9 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
                         }
                     }
                 }
-                userPrompt = `🤖 **Context Agent**: Reading mentioned files...\n${contextText}\n\n**User request**: ${userMsg}`;
+                userPrompt = `**Context Agent**: Reading mentioned files...\n${contextText}\n\n**User request**: ${userMsg}`;
             }
             
-            // Update local session messages for normal requests
             setSessions(prev => prev.map(s => 
                 s.id === activeSessionId 
                     ? { ...s, messages: [...s.messages, { role: 'user', content: userMsg }] }
@@ -112,8 +114,7 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
 
         if (window.electronAPI) {
             try {
-                // Ensure AI is initialized before asking (Lazy Init)
-                if (!ready) {
+                if (!ready) {  
                     await window.electronAPI.initAI(activeSessionId);
                     setReady(true);
                 }
@@ -148,12 +149,11 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
         } else if (choice === "2") {
             setSessions(prev => prev.map(s => 
                 s.id === activeSessionId 
-                    ? { ...s, messages: [...s.messages, { role: 'ai', content: `🧠 **Input Agent**: Analyzing code to generate relevant test cases...` }] }
+                    ? { ...s, messages: [...s.messages, { role: 'ai', content: ` **Input Agent**: Analyzing code to generate relevant test cases...` }] }
                     : s
             ));
             const genPrompt = `Generate a sample input for the following C++ code. Provide ONLY the input values, nothing else:\n\n${code}`;
             inputData = await window.electronAPI.askAI(genPrompt, activeSessionId);
-            // Clean up AI response to get just the input (often it adds backticks)
             inputData = inputData.replace(/```\w*/g, '').replace(/```/g, '').trim();
         }
         
@@ -192,12 +192,10 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
                         : s
                 ));
             } else {
-                // 3. Run
-                // We use a small hack to echo input into the program
                 const runCmd = `echo "${inputData.replace(/"/g, '\\"')}" | ./a.out`;
                 const runResult = await window.electronAPI.runCommand(runCmd, await window.electronAPI.runCommand('pwd').then(r => r.stdout.trim()));
                 
-                let output = `✅ **Execution Success**:\n**Output:**\n\`\`\`\n${runResult.stdout || '(No output)'}\n\`\`\``;
+                let output = `**Execution Success**:\n**Output:**\n\`\`\`\n${runResult.stdout || '(No output)'}\n\`\`\``;
                 if (runResult.stderr) {
                     output += `\n**Errors/Stderr:**\n\`\`\`\n${runResult.stderr}\n\`\`\``;
                 }
@@ -222,7 +220,10 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
             const messages = [...s.messages];
             const lastMsg = messages[messages.length - 1];
             if (lastMsg && lastMsg.role === 'ai' && lastMsg.isAgent) {
-                lastMsg.content = keepPrevious ? `${lastMsg.content}\n${content}` : content;
+                messages[messages.length - 1] = { 
+                    ...lastMsg, 
+                    content: keepPrevious ? `${lastMsg.content}\n${content}` : content 
+                };
             } else {
                 messages.push({ role: 'ai', content, isAgent: true });
             }
@@ -235,9 +236,9 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
         setAgentStatus("Initializing...");
         
         const isTestRequest = promptText.toLowerCase().includes('test');
-        const isErrorReport = promptText.toLowerCase().includes('error') || promptText.toLowerCase().includes('why');
+        const isErrorReport = promptText.toLowerCase().includes('error') || promptText.toLowerCase().includes('why') || promptText.toLowerCase().includes('debug') || promptText.toLowerCase().includes("errors");
 
-        updateAgentMessage(`🤖 **Geeks Agent**: Starting agentic flow for \`${file.name}\`...`);
+        updateAgentMessage(` **Geeks Agent**: Starting agentic flow for \`${file.name}\`...`);
 
         try {
             const content = await window.electronAPI.readFile(file.path);
@@ -245,46 +246,49 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
             const dirPath = file.path.substring(0, file.path.lastIndexOf('/'));
 
             if (isTestRequest || isErrorReport) {
-                // Step 1: Compile
                 setAgentStatus("Compiling...");
-                updateAgentMessage(`[1/3] ⚙️ Compiling \`${fileName}\`...`);
+                updateAgentMessage(`[1/3]  Compiling \`${fileName}\`...`);
+                const prompts=await window.run.get_prompts(content);
+                console.log(prompts)
+                if (prompts.length>0){
+                    updateAgentMessage(`Kindly submit the c++ code without special prompts for error checking`)
+                    return;
+                }
                 const compileResult = await window.electronAPI.runCommand(`g++ ${fileName} -o a.out`, dirPath);
                 
                 if (!compileResult.success) {
-                    updateAgentMessage(`❌ Compilation failed!\n\`\`\`\n${compileResult.stderr}\n\`\`\`\n\nAnalyzing error...`);
+                    updateAgentMessage(` Compilation failed!\n\`\`\`\n${compileResult.stderr}\n\`\`\`\n\nAnalyzing error...`);
                     const debugPrompt = `The user is asking about an error in this file: ${fileName}.\n\nFile Content:\n\`\`\`cpp\n${content}\n\`\`\`\n\nCompilation Error:\n\`\`\`\n${compileResult.stderr}\n\`\`\`\n\nPlease explain why this error is happening and provide the fix.`;
                     const response = await window.electronAPI.askAI(debugPrompt, activeSessionId);
-                    updateAgentMessage(`✅ **Analysis Complete**:\n${response}`);
+                    updateAgentMessage(` **Analysis Complete**:\n${response}`);
                     return;
                 }
 
-                updateAgentMessage(`✅ Compiled successfully.`);
+                updateAgentMessage(` Compiled successfully.`);
 
-                // Step 2: Test/Run
                 setAgentStatus("Running...");
                 let inputData = "";
                 if (isTestRequest) {
-                    updateAgentMessage(`[2/3] 🧠 Generating test input...`);
+                    updateAgentMessage(`[2/3]  Generating test input...`);
                     const genPrompt = `Generate a sample input for this C++ code. Provide ONLY the raw input values:\n\n${content}`;
                     inputData = await window.electronAPI.askAI(genPrompt, activeSessionId);
                     inputData = inputData.replace(/```\w*/g, '').replace(/```/g, '').trim();
                     updateAgentMessage(`*Using generated input:*\n\`\`\`\n${inputData}\n\`\`\``);
                 }
 
-                updateAgentMessage(`[3/3] 🚀 Running with input...`);
+                updateAgentMessage(`[3/3]  Running with input...`);
                 const runCmd = `echo "${inputData.replace(/"/g, '\\"')}" | ./a.out`;
                 const runResult = await window.electronAPI.runCommand(runCmd, dirPath);
                 
-                let output = `✅ **Execution Finished**:\n**Output:**\n\`\`\`\n${runResult.stdout || '(No output)'}\n\`\`\``;
+                let output = ` **Execution Finished**:\n**Output:**\n\`\`\`\n${runResult.stdout || '(No output)'}\n\`\`\``;
                 if (runResult.stderr) output += `\n**Stderr:**\n\`\`\`\n${runResult.stderr}\n\`\`\``;
                 updateAgentMessage(output);
             } else {
-                // Normal context request
                 const response = await window.electronAPI.askAI(`Context: ${content}\n\nUser request: ${promptText}`, activeSessionId);
                 updateAgentMessage(response, false);
             }
         } catch (e) {
-            updateAgentMessage(`❌ Unexpected error: ${e.message}`);
+            updateAgentMessage(` Unexpected error: ${e.message}`);
         } finally {
             setLoading(false);
             setAgentStatus(null);
@@ -368,6 +372,7 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
 
     const getFilteredMentions = () => {
         if (mentionSearch === null) return [];
+        console.log(input)
         const query = input.substring(mentionSearch + 1).toLowerCase();
         return (projectFiles || [])
             .filter(f => f.name.toLowerCase().includes(query))
@@ -385,16 +390,16 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
     const handleIndexKB = async () => {
         if (window.electronAPI && window.electronAPI.rag) {
             setLoading(true);
-            updateAgentMessage("📚 **RAG**: Indexing Knowledge Base...");
+            updateAgentMessage("**RAG**: Indexing Knowledge Base...");
             try {
                 const success = await window.electronAPI.rag.indexKB();
                 if (success) {
-                    updateAgentMessage("✅ **RAG**: Knowledge Base Indexed Successfully.");
+                    updateAgentMessage("**RAG**: Knowledge Base Indexed Successfully.");
                 } else {
-                    updateAgentMessage("❌ **RAG**: Failed to index Knowledge Base (Check if folder exists).");
+                    updateAgentMessage(" **RAG**: Failed to index Knowledge Base (Check if folder exists).");
                 }
             } catch (e) {
-                updateAgentMessage(`❌ **RAG**: Error indexing: ${e.message}`);
+                updateAgentMessage(`**RAG**: Error indexing: ${e.message}`);
             } finally {
                 setLoading(false);
             }
@@ -403,7 +408,6 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
 
     return (
         <div className={`flex flex-col h-full ${isDark ? 'bg-[#1e1e1e]' : 'bg-white'} text-vscode-text font-sans border-l border-[#2b2b2b]`}>
-            {/* Header & Session Switcher */}
             <div className={`px-2 flex flex-col ${isDark ? 'bg-[#252526]' : 'bg-[#f3f3f3]'} border-b border-[#2b2b2b] select-none`}>
                 <div className="h-9 flex items-center justify-between px-2">
                     <span className="font-bold text-[10px] uppercase tracking-wide opacity-70">AI Sessions</span>
@@ -442,7 +446,6 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
                 </div>
             </div>
 
-            {/* Chat Area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
                 {activeSession.messages.map((msg, index) => (
                     <div key={index} className="flex flex-col space-y-1">
@@ -528,7 +531,6 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Area */}
             <div className={`p-4 ${isDark ? 'bg-[#1e1e1e]' : 'bg-white'} border-t border-[#2b2b2b]`}>
                 <div className={`relative flex items-center ${isDark ? 'bg-[#3c3c3c]' : 'bg-[#f3f3f3]'} border ${isDark ? 'border-[#3c3c3c]' : 'border-[#ccc]'} focus-within:ring-1 focus-within:ring-[#007acc] focus-within:border-[#007acc] rounded-[2px]`}>
                     <textarea

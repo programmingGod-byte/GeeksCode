@@ -13,9 +13,6 @@ const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
         if (window.electronAPI && window.electronAPI.getModels) {
             const status = await window.electronAPI.getModels();
             setModels(status);
-            
-            // Simplified "isComplete": At least one main model + Nomic
-            // We'll check this in the Parent or use a more granular check
         }
     };
 
