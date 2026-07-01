@@ -19,9 +19,9 @@ let ptyExitListener = null;
 let llama = null;
 let model = null;
 let context = null;
-let activeModelId = 'deepseek'; // Default model
-const sessions = new Map(); // Map of sessionId -> LlamaChatSession
-const initializingSessions = new Set(); // To prevent race conditions in init
+let activeModelId = 'deepseek';
+const sessions = new Map();
+const initializingSessions = new Set();
 
 const AI_MODELS = {
   'deepseek': {
@@ -36,14 +36,12 @@ const AI_MODELS = {
     name: 'Qwen2.5 Coder 1.5B',
     url: 'https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf',
     filename: 'qwen2.5-coder-1.5b-instruct-q4_k_m.gguf',
-    expectedSize: null // Size can vary or be unknown
   }
 };
 
 const NOMIC_MODEL_URL = "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf";
 const NOMIC_FILENAME = "nomic-embed-text-v1.5.Q4_K_M.gguf";
 
-// ... existing code ...  
 
 ipcMain.handle('ai:delete-model', async (_, modelId) => {
   let success = true;
@@ -110,9 +108,12 @@ function createWindow() {
 
   mainWindow = new BrowserWindow(windowOptions);
 
+<<<<<<< HEAD
+=======
   mainWindow.maximize();
 
   // In dev mode, load from Vite dev server; in production load the built output
+>>>>>>> origin/main
   const isDev = !app.isPackaged;
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
@@ -128,7 +129,6 @@ function createWindow() {
     }
   });
 
-  // Build a custom menu to override Cmd+W / Ctrl+W
   const menuTemplate = [
     ...(isMac ? [{ role: 'appMenu' }] : []),
     {
@@ -195,10 +195,8 @@ function createWindow() {
     menu.popup({ window: mainWindow });
   });
 
-  // ─── Bypass X-Frame-Options for In-App Browser ───
-  // ─── Bypass X-Frame-Options for In-App Browser ───
   mainWindow.webContents.session.webRequest.onHeadersReceived(
-    { urls: ['*://*/*'] }, // Apply to all URLs
+    { urls: ['*://*/*'] },
     (details, callback) => {
       const responseHeaders = Object.assign({}, details.responseHeaders);
 
@@ -206,7 +204,7 @@ function createWindow() {
         'x-frame-options',
         'content-security-policy',
         'frame-options',
-        'x-content-type-options' // Sometimes causes issues with MIME types in iframes
+        'x-content-type-options'
       ];
 
       Object.keys(responseHeaders).forEach(key => {
@@ -253,6 +251,10 @@ function ParseCode(code) {
   }
   return results
 }
+ipcMain.handle('get_prompts', (event, code) => {
+  let prompts = ParseCode(code);
+  return prompts;
+})
 ipcMain.handle('parsed-code', async (event, code) => {
   let prompts = ParseCode(code)
   let finalCppCode;
@@ -374,7 +376,6 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
-// ─── IPC: App/Zoom ──────────────────────────────────────────
 ipcMain.handle('app:set-zoom', (_, level) => {
   if (mainWindow) {
     mainWindow.webContents.setZoomLevel(level);
@@ -390,7 +391,6 @@ ipcMain.handle('app:get-zoom', () => {
   return 0;
 });
 
-// ─── IPC: Dialog ────────────────────────────────────────────
 ipcMain.handle('dialog:openFolder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory'],
@@ -399,7 +399,6 @@ ipcMain.handle('dialog:openFolder', async () => {
   return result.filePaths[0];
 });
 
-// ─── IPC: File System ───────────────────────────────────────
 ipcMain.handle('fs:readDir', async (_, dirPath) => {
   try {
     const entries = fs.readdirSync(dirPath, { withFileTypes: true });
@@ -490,7 +489,6 @@ ipcMain.handle('fs:deleteFolder', async (_, folderPath) => {
 
 // ─── IPC: RAG Agent ─────────────────────────────────────────
 ipcMain.handle('rag:index', async (event, projectFiles) => {
-  // Ensure RAG service is initialized with model if possible
   if (!ragService.modelPath) {
     const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
     if (fs.existsSync(nomicPath)) {
@@ -514,16 +512,12 @@ ipcMain.handle('rag:query', async (_, query) => {
   return ragService.query(query);
 });
 
-// ... (fs:indexProject existing code) ...
-
-// ... (existing code) ...
 
 ipcMain.handle('rag:index-kb', async (event) => {
   const kbPath = path.join(__dirname, 'src', 'cp_dsa_knowledge_base');
-
-  // Ensure RAG service is initialized with model if possible
   if (!ragService.modelPath) {
     const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
+    console.log(nomicPath);
     if (fs.existsSync(nomicPath)) {
       console.log("RAG: Auto-initializing for KB index...");
       await ragService.init(app.getPath('userData'), nomicPath);
@@ -730,12 +724,24 @@ ipcMain.on('terminal:resize', (_, cols, rows) => {
 });
 
 ipcMain.on('terminal:cwd', (_, cwd) => {
-  currentWorkspacePath = cwd;
-  // Re-create terminal in new CWD
-  createTerminalProcess(80, 24);
+  if (ptyProcess) {
+    ptyProcess.kill();
+  }
+  const shell = process.platform === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/zsh';
+  ptyProcess = pty.spawn(shell, [], {
+    name: 'xterm-256color',
+    cols: 80,
+    rows: 24,
+    cwd: cwd,
+    env: process.env,
+  });
+  ptyProcess.onData((data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('terminal:data', data);
+    }
+  });
 });
 
-// ─── AI Integration ─────────────────────────────────────────
 
 async function downloadModel(event, url, filename, expectedSize = null, displayName = "Model") {
   const savePath = path.join(app.getPath('userData'), filename);
@@ -747,7 +753,7 @@ async function downloadModel(event, url, filename, expectedSize = null, displayN
       return savePath;
     }
     console.warn(`${displayName} size mismatch: found ${stats.size}, expected ${expectedSize}. Re-downloading...`);
-    fs.unlinkSync(savePath); // remove corrupted file
+    fs.unlinkSync(savePath);
   }
 
   try {
@@ -773,7 +779,6 @@ async function downloadModel(event, url, filename, expectedSize = null, displayN
       response.data.pipe(writer);
 
       writer.on('finish', () => {
-        // Second verification after download
         const stats = fs.statSync(savePath);
         if (totalSize && stats.size !== totalSize) {
           fs.unlink(savePath, () => { });
@@ -783,7 +788,7 @@ async function downloadModel(event, url, filename, expectedSize = null, displayN
         }
       });
       writer.on('error', (err) => {
-        fs.unlink(savePath, () => { }); // cleanup partial file
+        fs.unlink(savePath, () => { });
         reject(err);
       });
     });
@@ -801,7 +806,6 @@ let currentLoadedModelPath = null;
 async function initAIModel(modelPath, sessionId = 'default', createSession = true) {
   if (sessions.has(sessionId) && currentLoadedModelPath === modelPath) return true;
 
-  // If we don't need a session, just check if context exists
   if (!createSession && context && currentLoadedModelPath === modelPath) return true;
 
   while (sessionInitLock) await new Promise(r => setTimeout(r, 50));
@@ -824,7 +828,6 @@ async function initAIModel(modelPath, sessionId = 'default', createSession = tru
         const { getLlama } = await import("node-llama-cpp");
         console.log("AI: Initializing Llama backend...");
 
-        // Conservative initialization: CPU-only to avoid SIGILL/CUDA issues
         let currentLlama = await getLlama({ gpu: 'auto' });
         llama = currentLlama;
 
@@ -846,7 +849,7 @@ async function initAIModel(modelPath, sessionId = 'default', createSession = tru
           console.log("AI: Creating context...");
           context = await model.createContext({
             contextSize: 2048,
-            sequences: 2 // Allow Chat + Complexity sessions (Recycling handles the rest)
+            sequences: 2
           });
           console.log("AI: Context created.");
         }
@@ -900,24 +903,19 @@ async function initAIModel(modelPath, sessionId = 'default', createSession = tru
   }
 }
 
-// IPC Handlers
 ipcMain.handle('ai:init', async (event, sessionId = 'default') => {
   try {
-    // Download Active Model
     const activeModel = AI_MODELS[activeModelId];
     const modelPath = await downloadModel(event, activeModel.url, activeModel.filename, activeModel.expectedSize, activeModel.name);
 
-    // Download Nomic
     const nomicPath = await downloadModel(event, NOMIC_MODEL_URL, NOMIC_FILENAME, null, "Nomic Embed");
 
-    // Initialize RAG Service
     await ragService.init(app.getPath('userData'), nomicPath);
 
 
     await initAIModel(path.join(app.getPath('userData'), activeModel.filename), sessionId);
 
     /*
-    // Auto-index Knowledge Base if not already done
     const kbPath = path.join(__dirname, 'src', 'cp_dsa_knowledge_base');
     if (fs.existsSync(kbPath)) {
         console.log("RAG: Auto-indexing KB after initial download...");
@@ -945,15 +943,12 @@ ipcMain.handle('ai:check-model', () => {
   const modelPath = path.join(app.getPath('userData'), activeModel.filename);
   const nomicPath = path.join(app.getPath('userData'), NOMIC_FILENAME);
 
-  // Check Active Model
   if (!fs.existsSync(modelPath)) return false;
-  // Only check size if expectedSize is known
   if (activeModel.expectedSize) {
     const stats = fs.statSync(modelPath);
     if (stats.size !== activeModel.expectedSize) return false;
   }
 
-  // Check Nomic (optional size check if we knew it, for now just existence)
   if (!fs.existsSync(nomicPath)) return false;
 
   return true;
@@ -1013,7 +1008,6 @@ ipcMain.handle('ai:ask', async (event, userPrompt, sessionId = 'default') => {
 
     if (!skipRAG) {
       console.log(`AI: [Session ${sessionId}] Retrieving RAG context...`);
-      // Strictly request only 3 chunks
       const contextItems = await ragService.query(userPrompt, 3).catch(e => {
         console.warn("RAG: Query failed, skipping context", e);
         return [];
@@ -1021,7 +1015,6 @@ ipcMain.handle('ai:ask', async (event, userPrompt, sessionId = 'default') => {
 
       if (contextItems.length > 0) {
         const contextString = contextItems.map(item => `[Source: ${item.source}]\n${item.text}`).join("\n\n");
-        // Final safety truncation of context string
         const truncatedContext = contextString.substring(0, 4000);
         augmentedPrompt = `Relevant Context:\n---------------------\n${truncatedContext}\n---------------------\nInstruction: Use the context above if relevant, otherwise use your general knowledge. Respond to: ${userPrompt}`;
         console.log(`AI: [Session ${sessionId}] Augmented prompt with ${contextItems.length} chunks.`);
@@ -1060,7 +1053,6 @@ ipcMain.handle('ai:destroy-session', async (event, sessionId) => {
   return false;
 });
 
-// ─── Codeforces credentials ──────────────────────────────
 const CF_CONFIG_PATH = path.join(app.getPath('userData'), 'cf_config.json');
 
 ipcMain.handle('codeforces:save-creds', async (_, creds) => {
@@ -1127,7 +1119,6 @@ ipcMain.handle('codeforces:get-creds', async () => {
 });
 
 
-// ─── Codeforces Dataset Filtering ──────────────────────────
 const DATASET_PATH = path.join(__dirname, 'src', 'codeforces_dataset');
 
 ipcMain.handle('codeforces:get-dataset-metadata', async () => {
@@ -1147,12 +1138,11 @@ ipcMain.handle('codeforces:get-dataset-metadata', async () => {
         const ratingPath = path.join(topicPath, rating);
         const files = fs.readdirSync(ratingPath).filter(f => f.endsWith('.json'));
 
-        // Sample some files to get tags (scanning all might be slow, but let's try for now if dataset is medium)
         for (const file of files) {
           try {
             const content = JSON.parse(fs.readFileSync(path.join(ratingPath, file), 'utf-8'));
             if (content.tags) content.tags.forEach(t => tagsSet.add(t));
-          } catch (e) { /* ignore corrupt files */ }
+          } catch (e) { }
         }
       }
     }
@@ -1191,7 +1181,6 @@ ipcMain.handle('codeforces:get-filtered-problems', async (_, filters) => {
             const filePath = path.join(ratingPath, file);
             const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
 
-            // Apply filters
             if (tag && (!content.tags || !content.tags.includes(tag))) continue;
             if (search && !content.title.toLowerCase().includes(search.toLowerCase())) continue;
 
@@ -1215,7 +1204,6 @@ ipcMain.handle('codeforces:get-filtered-problems', async (_, filters) => {
   }
 });
 
-// ─── IPC: Editor State ────────────────────────────────────────
 ipcMain.handle('editor:save-state', async (_, state) => {
   const statePath = path.join(os.homedir(), '.geeks_editor_state.json');
   fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
@@ -1234,15 +1222,12 @@ ipcMain.handle('editor:get-state', async () => {
   return null;
 });
 
-// Autocomplete handler
 ipcMain.handle('ai:complete', async (event, codeContext) => {
   if (!context) return null;
   let tempSession = null;
   let sequence = null;
   try {
     const { LlamaChatSession } = await import("node-llama-cpp");
-    // For autocomplete, we try to get a sequence. If context is full, this might fail unless we recycle.
-    // But autocomplete is ephemeral.
     sequence = await getSequenceWithRetry(context);
     globalAutocompleteSequence = sequence;
 
@@ -1252,13 +1237,13 @@ ipcMain.handle('ai:complete', async (event, codeContext) => {
 
     const [prefix, suffix] = codeContext.split('<CURSOR>');
     const prompt = `<｜fim_begin｜>${prefix}<｜fim_hole｜>${suffix}<｜fim_end｜>`;
-
+    console.log("prompt sent");
     const response = await tempSession.prompt(prompt, {
       maxTokens: 50,
       temperature: 0.1,
       stopOnTokens: ["\n", "}", ";", "<｜fim_end｜>"]
     });
-
+    console.log("prompt recv");
     return response.trim();
   } catch (error) {
     console.error("AI Autocomplete failed:", error);
@@ -1277,7 +1262,6 @@ ipcMain.handle('ai:complete', async (event, codeContext) => {
   }
 });
 
-// Inline Prompt Handler (~("prompt"))
 ipcMain.handle('ai:inline-prompt', async (event, code, prompt, lineNumber) => {
   if (!context) {
     console.log("AI: Context not initialized for inline prompt. Auto-initializing...");
@@ -1304,19 +1288,16 @@ ipcMain.handle('ai:inline-prompt', async (event, code, prompt, lineNumber) => {
   try {
     const { LlamaChatSession } = await import("node-llama-cpp");
 
-    // 1. Context Truncation
     const lines = code.split('\n');
-    const startLine = Math.max(0, lineNumber - 50); // 50 lines before
-    const endLine = Math.min(lines.length, lineNumber + 20); // 20 lines after
+    const startLine = Math.max(0, lineNumber - 50);
+    const endLine = Math.min(lines.length, lineNumber + 20);
 
-    // Add line numbers to context for the model
     const contextLines = lines
       .slice(startLine, endLine)
       .map((line, idx) => `${startLine + idx + 1}: ${line}`);
 
     const contextBlock = contextLines.join('\n');
 
-    // 2. Construct Prompt
     const systemInstruction = `You are an expert coding assistant.
 User Request: "${prompt}"
 Task: Write valid C++ code to fulfill the User Request.
@@ -1338,29 +1319,18 @@ Write the code for "${prompt}". Only return the code.`;
 
     const response = await tempSession.prompt(userMsg, {
       systemPrompt: systemInstruction,
-      temperature: 0.2, // Low temperature for deterministic code
+      temperature: 0.2,
       maxTokens: 1024
     });
 
     console.log("AI: Inline response generated.");
 
-    // Cleanup response (robust extraction)
     let cleanResponse = response.trim();
-
-    // Regex to find first code block ```...```
     const codeBlockMatch = cleanResponse.match(/```(?:[a-zA-Z]*)\n([\s\S]*?)```/);
 
     if (codeBlockMatch) {
       cleanResponse = codeBlockMatch[1].trim();
     } else {
-      // Fallback: If no code block, try to strip potential "Sure..." text if it appears to be a mixed response
-      // But valid code might not be in a block. 
-      // Let's remove lines that don't look like code if they are at the start? 
-      // For now, simpler is creating a heuristic: 
-      // If response starts with text and then has code, the prompt instructions should have prevented this, 
-      // but 'deepseek' can be chatty.
-
-      // Simple heuristic: remove lines starting with "Sure", "Here", "Okay"
       const lines = cleanResponse.split('\n');
       if (lines.length > 0 && /^(sure|here|okay|certainly|i can|below is)/i.test(lines[0])) {
         cleanResponse = lines.slice(1).join('\n').trim();

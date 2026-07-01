@@ -14,14 +14,13 @@ export default function SearchPanel({ folderPath, onFileClick }) {
                 return;
             }
 
-            if (query.length < 2) return; // Wait for at least 2 chars
+            if (query.length < 2) return; 
 
             setLoading(true);
             setError('');
 
             try {
-                // Expanded extensions
-                const options = { extensions: ['.cpp', '.h', '.hpp', '.c'] };
+                const options = { extensions: ['.cpp', '.h', '.hpp', '.c'] }; 
                 const searchResults = await window.electronAPI.searchFiles(folderPath, query, options);
                 setResults(searchResults);
             } catch (err) {

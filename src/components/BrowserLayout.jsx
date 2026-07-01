@@ -22,7 +22,6 @@ export default function BrowserLayout({ onClose, initialUrl = 'https://codeforce
 
     return (
         <div className="flex flex-col h-full bg-[#1e1e1e] border-l border-[#2b2b2b]">
-            {/* Browser Header */}
             <div className="flex items-center space-x-2 p-2 bg-[#252526] border-b border-[#3c3c3c]">
                 <div className="flex items-center space-x-1 pr-2 border-r border-[#3c3c3c]">
                     <button className="p-1 hover:bg-white/10 rounded disabled:opacity-30">
@@ -62,7 +61,6 @@ export default function BrowserLayout({ onClose, initialUrl = 'https://codeforce
                 </div>
             </div>
 
-            {/* Browser Content */}
             <div className="flex-1 bg-white relative flex flex-col">
                 <webview
                     src={url}

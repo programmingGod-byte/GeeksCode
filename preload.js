@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     readDir: (dirPath) => ipcRenderer.invoke('fs:readDir', dirPath),
     readFile: (filePath) => ipcRenderer.invoke('fs:readFile', filePath),
     writeFile: (filePath, content) => ipcRenderer.invoke('fs:writeFile', filePath, content),
+    indexProject: (rootPath) => ipcRenderer.invoke('fs:indexProject', rootPath),
     createFile: (filePath) => ipcRenderer.invoke('fs:createFile', filePath),
     createFolder: (folderPath) => ipcRenderer.invoke('fs:createFolder', folderPath),
     deleteFile: (filePath) => ipcRenderer.invoke('fs:deleteFile', filePath),
@@ -77,6 +78,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onRagProgress: (callback) => ipcRenderer.on('rag:progress', (_, data) => callback(data)),
 
     // AI
+<<<<<<< HEAD
+    // AI
+=======
+>>>>>>> origin/main
     initAI: (sessionId) => ipcRenderer.invoke('ai:init', sessionId),
     checkModel: () => ipcRenderer.invoke('ai:check-model'),
     askAI: (prompt, sessionId) => ipcRenderer.invoke('ai:ask', prompt, sessionId),
@@ -90,7 +95,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Zoom
     setZoom: (level) => ipcRenderer.invoke('app:set-zoom', level),
     getZoom: () => ipcRenderer.invoke('app:get-zoom'),
-    indexProject: (dirPath) => ipcRenderer.invoke('fs:indexProject', dirPath),
+        
     searchFiles: (rootPath, query, options) => ipcRenderer.invoke('fs:search', rootPath, query, options),
     destroySession: (sessionId) => ipcRenderer.invoke('ai:destroy-session', sessionId),
     deleteModel: (modelId) => ipcRenderer.invoke('ai:delete-model', modelId),
@@ -98,5 +103,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
 contextBridge.exposeInMainWorld('run', {
     submit: (a) => ipcRenderer.invoke('submit-code', a),
     parse: (a) => ipcRenderer.invoke('parsed-code', a),
+    get_prompts: (a)=>ipcRenderer.invoke('get_prompts',a),
     generateTestCases: (code, count) => ipcRenderer.invoke('generate-testcases', code, count)
 });

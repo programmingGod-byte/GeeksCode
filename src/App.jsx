@@ -53,7 +53,6 @@ export default function App() {
     const editorRef = useRef(null);
     const terminalRef = useRef(null);
 
-    // ─── AI Model Sync ─────────────────────────────────
     useEffect(() => {
         const syncModel = async () => {
             if (window.electronAPI && window.electronAPI.getActiveModel) {
@@ -84,12 +83,10 @@ export default function App() {
         }
     }, []);
 
-    // ─── RAG Progress Listener ──────────────────────────
     useEffect(() => {
         if (window.electronAPI && window.electronAPI.onRagProgress) {
             window.electronAPI.onRagProgress((data) => {
                 setRagProgress(data);
-                // If finished (current + 1 === total), clear after a delay
                 if (data.current + 1 >= data.total) {
                     setTimeout(() => setRagProgress(null), 3000);
                 }
@@ -97,7 +94,6 @@ export default function App() {
         }
     }, []);
 
-    // ─── Persistence: Load ──────────────────────────────
     useEffect(() => {
         const initPersistence = async () => {
             if (window.electronAPI && window.electronAPI.getState) {
@@ -129,7 +125,6 @@ export default function App() {
         initPersistence();
     }, [handleIndexProject]);
 
-    // ─── Persistence: Save ──────────────────────────────
     useEffect(() => {
         const saveTimeout = setTimeout(() => {
             if (window.electronAPI && window.electronAPI.saveState) {
@@ -144,7 +139,6 @@ export default function App() {
         return () => clearTimeout(saveTimeout);
     }, [folderPath, folderName, openTabs, activeTab]);
 
-    // ─── AI Model Check ─────────────────────────────────
     useEffect(() => {
         const checkModel = async () => {
             if (window.electronAPI && window.electronAPI.checkModel) {
@@ -157,7 +151,6 @@ export default function App() {
         checkModel();
     }, []);
 
-    // ─── Theme ──────────────────────────────────────────
     useEffect(() => {
         const isDark = theme.includes('dark');
         document.body.classList.toggle('light', !isDark);
@@ -167,7 +160,6 @@ export default function App() {
         setTheme(prev => prev === 'vs-dark' ? 'vs' : 'vs-dark');
     }, []);
 
-    // ─── Titlebar height (macOS vs windows) ──────────────
     useEffect(() => {
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
         if (!isMac) {
@@ -175,8 +167,6 @@ export default function App() {
         }
     }, []);
 
-
-    // ─── Zoom ──────────────────────────────────────────
     const handleZoomIn = useCallback(async () => {
         const newLevel = Math.min(zoomLevel + 0.5, 3);
         setZoomLevel(newLevel);
@@ -194,7 +184,6 @@ export default function App() {
         await window.electronAPI.setZoom(0);
     }, []);
 
-    // ─── IPC: Close Tab from Main Process (Cmd+W) ──────
     useEffect(() => {
         const handleCloseActiveTab = () => {
             setOpenTabs((prev) => {
@@ -225,7 +214,6 @@ export default function App() {
         };
     }, [activeTab]);
 
-    // ─── Terminal Exit Listener ────────────────────────
     useEffect(() => {
         const unmountExit = window.electronAPI.onTerminalExit(() => {
             setPanelVisible(false);
@@ -235,7 +223,6 @@ export default function App() {
         };
     }, []);
 
-    // ─── Codeforces Settings Trigger from Main ──────────
     useEffect(() => {
         if (window.electronAPI && window.electronAPI.codeforces) {
             window.electronAPI.codeforces.onOpenSettings(() => {
@@ -244,20 +231,16 @@ export default function App() {
         }
     }, []);
 
-    // ─── Keyboard Shortcuts ─────────────────────────────
     useEffect(() => {
         const handleKeyDown = (e) => {
-            // Ctrl/Cmd + ` → toggle terminal
-            if ((e.ctrlKey || e.metaKey) && e.key === '`') {
+            if ((e.ctrlKey || e.metaKey) && (e.key === '`' || e.code === 'Backquote')) {
                 e.preventDefault();
                 setPanelVisible((v) => !v);
             }
-            // Ctrl/Cmd + S → save
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
                 handleSave();
             }
-            // Zoom shortcuts
             if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
                 e.preventDefault();
                 handleZoomIn();
@@ -270,7 +253,6 @@ export default function App() {
                 e.preventDefault();
                 handleResetZoom();
             }
-            // Quick Open shortcut
             if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
                 e.preventDefault();
                 setShowQuickOpen(true);
@@ -281,11 +263,10 @@ export default function App() {
                 setSidebarVisible(v => !v);
             }
         };
-        document.addEventListener('keydown', handleKeyDown);
-        return () => document.removeEventListener('keydown', handleKeyDown);
+        document.addEventListener('keydown', handleKeyDown, true);
+        return () => document.removeEventListener('keydown', handleKeyDown, true);
     }, [activeTab, openTabs]);
 
-    // ─── Open Folder ────────────────────────────────────
     const handleOpenFolder = useCallback(async () => {
         const path = await window.electronAPI.openFolder();
         if (!path) return;
@@ -300,11 +281,9 @@ export default function App() {
         setActiveTab(null);
         handleIndexProject(path);
 
-        // Update terminal CWD
         window.electronAPI.setTerminalCwd(path);
     }, [handleIndexProject]);
 
-    // ─── Open File ──────────────────────────────────────
     useEffect(() => {
         const unmountOpen = window.electronAPI.onOpenFolder(() => {
             handleOpenFolder();
@@ -328,7 +307,6 @@ export default function App() {
         if (!fileName) {
             fileName = filePath.split('/').pop() || filePath.split('\\').pop();
         }
-        // Already open?
         const existing = openTabs.find((t) => t.filePath === filePath);
         if (existing) {
             console.log("File already open, switching tab.");
@@ -348,7 +326,7 @@ export default function App() {
         const newTab = { filePath, fileName, content, language, isDirty: false };
         setOpenTabs((prev) => [...prev, newTab]);
         setActiveTab(filePath);
-        setViewingProblem(null); // Close viewer if a normal file is opened
+        setViewingProblem(null);
     }, [openTabs]);
 
     const handleViewProblem = useCallback(async (filePath) => {
@@ -362,12 +340,10 @@ export default function App() {
             }
         } catch (e) {
             console.error("Failed to parse problem JSON:", e);
-            // Fallback to normal file click if parsing fails
             handleFileClick(filePath);
         }
     }, [handleFileClick]);
 
-    // ─── Complexity Analysis ────────────────────────────
     const handleAnalyzeComplexity = useCallback(async () => {
         if (!activeTab) return;
         const tab = openTabs.find(t => t.filePath === activeTab);
@@ -378,17 +354,16 @@ export default function App() {
             content = editorRef.current.getValue();
         }
 
-        const newId = 'complexity-session'; // Reuse session to avoid crash on create/destroy
+        const newId = 'complexity-session';
         const newSession = {
             id: newId,
             name: `Big O: ${tab.fileName}`,
-            messages: [{ role: 'ai', content: `🧠 Analyzing performance for **${tab.fileName}**...` }]
+            messages: [{ role: 'ai', content: `Analyzing performance for **${tab.fileName}**...` }]
         };
 
         setChatSessions(prev => {
             const existing = prev.find(s => s.id === newId);
             if (existing) {
-                // Reuse session, just append user request (or clear and start new)
                 return prev.map(s => s.id === newId ? newSession : s);
             }
             return [...prev, newSession];
@@ -409,7 +384,6 @@ ${content}
 \`\`\``;
             if (window.electronAPI) {
                 try {
-                    // Initialize the AI session first (safe mode requires this)
                     await window.electronAPI.initAI(newId);
 
                     const response = await window.electronAPI.askAI(prompt, newId);
@@ -430,8 +404,7 @@ ${content}
         }, 500);
     }, [activeTab, openTabs]);
 
-    // ─── File Management ────────────────────────────────
-    const handleCreateItem = useCallback(async (name, isFolder = false) => {
+    const handleCreateFile = useCallback(() => {
         if (!folderPath) return;
         const fullPath = `${folderPath}/${name}`;
         let ok = false;
@@ -457,26 +430,25 @@ ${content}
     const handleCreateFile = () => { }; // Legacy, will be replaced in props
     const handleCreateFolder = () => { }; // Legacy
 
-    // ─── Automatic Indexing (Optimized to skip existing) ──────────
     useEffect(() => {
         if (folderPath) {
             handleIndexProject(folderPath);
         }
     }, [folderPath, handleIndexProject]);
 
-    // ─── Switch Tab ─────────────────────────────────────
     const handleSwitchTab = useCallback((filePath) => {
         setActiveTab(filePath);
     }, []);
 
-    // ─── Close Tab ──────────────────────────────────────
     const handleCloseTab = useCallback((filePath) => {
         setOpenTabs((prev) => {
             const idx = prev.findIndex((t) => t.filePath === filePath);
             if (idx === -1) return prev;
             const newTabs = prev.filter((t) => t.filePath !== filePath);
-
-            // If closing the active tab, switch to neighbor
+            const tab = prev.filter((t) => t.filePath === filePath);
+            if (tab[0].isDirty) {
+                return prev;
+            }
             if (filePath === activeTab) {
                 if (newTabs.length > 0) {
                     const newIdx = Math.min(idx, newTabs.length - 1);
@@ -489,7 +461,6 @@ ${content}
         });
     }, [activeTab]);
 
-    // ─── Content Change ─────────────────────────────────
     const handleContentChange = useCallback((filePath, value) => {
         setOpenTabs((prev) =>
             prev.map((t) => {
@@ -503,7 +474,6 @@ ${content}
             })
         );
 
-        // Inline AI Completion Detection: ~("prompt")
         if (isAICompleting) return;
 
         const inlinePattern = /~\("(.*?)"\);/;
@@ -513,7 +483,6 @@ ${content}
             const prompt = match[1];
             const fullMatch = match[0];
 
-            // We have a match! Start completion
             setIsAICompleting(true);
 
             let triggerLine = 1;
@@ -527,7 +496,6 @@ ${content}
 
             console.log(`AI: Inline completion triggered for: ${prompt} at line ${triggerLine}`);
 
-            // We use a small timeout to ensure the UI updates first (showing loading icon)
             setTimeout(async () => {
                 try {
                     const result = await window.electronAPI.inlinePrompt(value, prompt, triggerLine);
@@ -535,8 +503,6 @@ ${content}
                     if (editorRef.current) {
                         const model = editorRef.current.getModel();
                         const currentText = model.getValue();
-
-                        // Re-search for the pattern in current text to get the latest position
                         const latestMatch = currentText.match(inlinePattern);
 
                         if (latestMatch) {
@@ -575,13 +541,11 @@ ${content}
         }
     }, [isAICompleting]);
 
-    // ─── Save ───────────────────────────────────────────
     const handleSave = useCallback(async () => {
         if (!activeTab) return;
         const tab = openTabs.find((t) => t.filePath === activeTab);
         if (!tab) return;
 
-        // Get value from editor if available
         let content = tab.content;
         if (editorRef.current) {
             content = editorRef.current.getValue();
@@ -595,12 +559,10 @@ ${content}
         }
     }, [activeTab, openTabs]);
 
-    // ─── Cursor Position ───────────────────────────────
     const handleCursorChange = useCallback((line, col) => {
         setCursorPos({ line, col });
     }, []);
 
-    // ─── Sidebar Resize ────────────────────────────────
     const handleSidebarMouseDown = useCallback((e) => {
         e.preventDefault();
         const startX = e.clientX;
@@ -625,7 +587,6 @@ ${content}
         document.addEventListener('mouseup', handleMouseUp);
     }, [sidebarWidth]);
 
-    // ─── AI Chat Resize ───────────────────────────────
     const handleAiChatMouseDown = useCallback((e) => {
         e.preventDefault();
         const startX = e.clientX;
@@ -652,17 +613,14 @@ ${content}
         document.addEventListener('mouseup', handleMouseUp);
     }, [aiChatWidth]);
 
-    // ─── Derived State ──────────────────────────────────
     const currentTab = openTabs.find((t) => t.filePath === activeTab);
     const languageLabel = currentTab ? getLanguageLabel(currentTab.language) : 'Plain Text';
     const positionText = `Ln ${cursorPos.line}, Col ${cursorPos.col}`;
 
-    // ─── Refresh File Explorer ──────────────────────────
     const refreshFileExplorer = useCallback(async () => {
         if (!folderPath) return;
         const entries = await window.electronAPI.readDir(folderPath);
         setFileEntries(entries);
-        // Also re-index project to keep RAG up to date with new files
         handleIndexProject(folderPath);
     }, [folderPath, handleIndexProject]);
 
@@ -772,7 +730,6 @@ ${content}
                         theme={theme}
                     />
                 </div>
-                {/* AI Chat Layout with Resizer */}
                 <div id="aichat-resize" onMouseDown={handleAiChatMouseDown}></div>
                 <div style={{ width: `${aiChatWidth}px`, borderLeft: '1px solid #2b2b2b', background: theme.includes('dark') ? '#1e1e1e' : '#fff', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
                     <AIChat

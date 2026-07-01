@@ -6,12 +6,10 @@ import { X, Trophy, Tag, Star, Clock, ExternalLink } from 'lucide-react';
 export default function ProblemViewer({ problem, onClose }) {
     if (!problem) return null;
 
-    // Helper to convert Codeforces LaTeX notation $$$...$$$ to something readable or standard LaTeX if possible
-    // For now, we'll do a simple regex replace to make it look decent in Markdown
     const formatStatement = (text) => {
         if (!text) return '';
         return text
-            .replace(/\$\$\$(.*?)\$\$\$/g, '*$1*') // Bold/Italicize formulas for now
+            .replace(/\$\$\$(.*?)\$\$\$/g, '*$1*') 
             .replace(/\\le/g, '≤')
             .replace(/\\ge/g, '≥')
             .replace(/\\ne/g, '≠')
@@ -65,7 +63,6 @@ export default function ProblemViewer({ problem, onClose }) {
                 </div>
             </div>
 
-            {/* Content */}
             <div className="flex-1 overflow-y-auto px-8 py-6 custom-scrollbar">
                 <div className="max-w-3xl mx-auto space-y-8 pb-10">
                     

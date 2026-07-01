@@ -13,9 +13,6 @@ const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
         if (window.electronAPI && window.electronAPI.getModels) {
             const status = await window.electronAPI.getModels();
             setModels(status);
-
-            // Simplified "isComplete": At least one main model + Nomic
-            // We'll check this in the Parent or use a more granular check
         }
     };
 
@@ -39,8 +36,6 @@ const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
                 setError(result.error);
             } else {
                 await refreshModelStatus();
-                // If this was the last required model, we could close
-                // For now, let user see "Downloaded" status
             }
         } catch (err) {
             setError(err.message);
@@ -52,7 +47,6 @@ const ModelDownloadModal = ({ onClose, onDownloadComplete }) => {
     const handleDelete = async (modelId) => {
         if (window.electronAPI && window.electronAPI.deleteModel) {
             try {
-                // If modelId is a string, it's a specific model. If it's an event (from footer button), it's all.
                 const id = typeof modelId === 'string' ? modelId : undefined;
                 await window.electronAPI.deleteModel(id);
                 await refreshModelStatus();
