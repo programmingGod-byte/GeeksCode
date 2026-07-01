@@ -404,7 +404,7 @@ ${content}
         }, 500);
     }, [activeTab, openTabs]);
 
-    const handleCreateFile = useCallback(() => {
+    const handleCreateItem = useCallback(async (name, isFolder) => {
         if (!folderPath) return;
         const fullPath = `${folderPath}/${name}`;
         let ok = false;
@@ -427,8 +427,6 @@ ${content}
         }
     }, [folderPath, handleIndexProject, handleFileClick]);
 
-    const handleCreateFile = () => { }; // Legacy, will be replaced in props
-    const handleCreateFolder = () => { }; // Legacy
 
     useEffect(() => {
         if (folderPath) {

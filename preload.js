@@ -77,11 +77,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     onRagProgress: (callback) => ipcRenderer.on('rag:progress', (_, data) => callback(data)),
 
-    // AI
-<<<<<<< HEAD
-    // AI
-=======
->>>>>>> origin/main
     initAI: (sessionId) => ipcRenderer.invoke('ai:init', sessionId),
     checkModel: () => ipcRenderer.invoke('ai:check-model'),
     askAI: (prompt, sessionId) => ipcRenderer.invoke('ai:ask', prompt, sessionId),
