@@ -146,7 +146,7 @@ kbd,
   justify-content: center;
   -webkit-app-region: drag;
   position: relative;
-  border-bottom: 1px solid #1a1a1a;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .titlebar-drag {
@@ -258,6 +258,19 @@ kbd,
   padding-bottom: 12px;
 }
 
+.inline-rename-input {
+  flex: 1;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--accent);
+  outline: none;
+  font-size: 13px;
+  font-family: var(--font-family);
+  padding: 1px 4px;
+  height: 20px;
+  border-radius: 2px;
+}
+
 /* File Tree Items */
 .tree-item {
   display: flex;
@@ -323,6 +336,20 @@ kbd,
 
 .tree-children.open {
   display: block;
+}
+
+/* Inline Input Creation */
+.inline-input-container {
+  border: 1px solid var(--accent);
+  margin: 1px 4px;
+  height: 24px !important;
+  background: var(--bg-selected) !important;
+}
+
+.inline-input-container input {
+  padding: 0 4px;
+  font-family: var(--font-family);
+  height: 100%;
 }
 
 /* Open Folder Prompt */
@@ -411,7 +438,7 @@ kbd,
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
-  border-right: 1px solid #1a1a1a;
+  border-right: 1px solid var(--border-color);
   white-space: nowrap;
   min-width: 0;
   max-width: 200px;
@@ -732,34 +759,34 @@ body.light .theme-toggle .icon-moon {
 }
 
 .rag-progress-container {
-    display: flex;
-    align-items: center;
-    margin-left: 15px;
-    gap: 8px;
+  display: flex;
+  align-items: center;
+  margin-left: 15px;
+  gap: 8px;
 }
 
 .rag-status-text {
-    white-space: nowrap;
-    opacity: 0.9;
-    font-size: 11px;
+  white-space: nowrap;
+  opacity: 0.9;
+  font-size: 11px;
 }
 
 .rag-progress-bar-bg {
-    width: 60px;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 2px;
-    overflow: hidden;
+  width: 60px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
 }
 
 .light .rag-progress-bar-bg {
-    background: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.1);
 }
 
 .rag-progress-bar-fill {
-    height: 100%;
-    background: #a855f7;
-    transition: width 0.3s ease;
+  height: 100%;
+  background: #a855f7;
+  transition: width 0.3s ease;
 }
 
 .status-left,
@@ -861,6 +888,7 @@ body.light .theme-select {
 body.light .zoom-btn {
   color: #fff;
 }
+
 body.light .zoom-value {
   color: #fff;
 }

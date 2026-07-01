@@ -32,13 +32,13 @@ export default function TestCaseGenerator({ activeFile, code }) {
     };
 
     return (
-        <div className="flex flex-col h-full bg-[#252526] text-[#cccccc] p-4 space-y-4 overflow-y-auto custom-scrollbar">
-            <div className="flex items-center space-x-2 border-b border-[#3c3c3c] pb-2">
+        <div className="flex flex-col h-full bg-[var(--bg-sidebar)] text-[var(--text-primary)] p-4 space-y-4 overflow-y-auto custom-scrollbar">
+            <div className="flex items-center space-x-2 border-b border-[var(--border-color)] pb-2">
                 <FlaskConical size={16} className="text-amber-400" />
                 <span className="text-sm font-bold uppercase tracking-wider">Test Case Generator</span>
             </div>
             {activeFile && (
-                <div className="text-[10px] text-[#858585] truncate" title={activeFile}>
+                <div className="text-[10px] text-[var(--text-secondary)] truncate" title={activeFile}>
                     File: {activeFile.split('/').pop()}
                 </div>
             )}
@@ -51,7 +51,7 @@ export default function TestCaseGenerator({ activeFile, code }) {
                     max={20}
                     value={numTests}
                     onChange={(e) => setNumTests(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-                    className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded p-2 text-xs font-mono focus:outline-none focus:border-amber-500/50"
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-primary)] rounded p-2 text-xs font-mono focus:outline-none focus:border-amber-500/50"
                 />
             </div>
             <button
@@ -91,8 +91,8 @@ export default function TestCaseGenerator({ activeFile, code }) {
                             <span>Copy All</span>
                         </button>
                     </div>
-                    <div className="bg-[#1e1e1e] border border-[#3c3c3c] rounded-lg overflow-hidden">
-                        <pre className="text-sm font-mono p-4 overflow-x-auto text-[#d4d4d4] max-h-[480px] overflow-y-auto custom-scrollbar whitespace-pre-wrap">{
+                    <div className="bg-[var(--bg-input)] border border-[var(--border-color)] rounded-lg overflow-hidden">
+                        <pre className="text-sm font-mono p-4 overflow-x-auto text-[var(--text-primary)] max-h-[480px] overflow-y-auto custom-scrollbar whitespace-pre-wrap">{
                             generatedTests.map((tc, idx) =>
                                 `${tc}`
                             ).join('\n')

@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { FilePlus, FolderPlus, RefreshCw } from 'lucide-react';
-import { getFileIcon, FOLDER_ICON, FOLDER_OPEN_ICON } from '../utils/fileUtils';
+import { FilePlus, FolderPlus, RefreshCw, X, Check } from 'lucide-react';
+import { getFileIcon, getFolderIcon } from '../utils/fileUtils';
 
 function TreeItem({ entry, depth, onFileClick, activeFile }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -36,18 +36,14 @@ function TreeItem({ entry, depth, onFileClick, activeFile }) {
                                 <path d="M6 4l4 4-4 4z" />
                             </svg>
                         </span>
-                        <span className="file-icon">
-                            <span className={`codicon codicon-${isOpen ? FOLDER_OPEN_ICON.icon : FOLDER_ICON.icon}`} style={{ color: FOLDER_ICON.color }}></span>
-                        </span>
+                        <span className="file-icon" dangerouslySetInnerHTML={{ __html: getFolderIcon(isOpen) }}></span>
                     </>
                 ) : (
                     <>
                         <span className="chevron" style={{ visibility: 'hidden' }}>
                             <svg viewBox="0 0 16 16"><path /></svg>
                         </span>
-                        <span className="file-icon">
-                            <span className={`codicon codicon-${getFileIcon(entry.name).icon}`} style={{ color: getFileIcon(entry.name).color }}></span>
-                        </span>
+                        <span className="file-icon" dangerouslySetInnerHTML={{ __html: getFileIcon(entry.name).icon }}></span>
                     </>
                 )}
                 <span className="file-label">{entry.name}</span>
@@ -69,6 +65,44 @@ function TreeItem({ entry, depth, onFileClick, activeFile }) {
     );
 }
 
+function InlineInput({ type, onConfirm, onCancel }) {
+    const [name, setName] = React.useState('');
+    const inputRef = React.useRef(null);
+
+    React.useEffect(() => {
+        if (inputRef.current) {
+            inputRef.current.focus();
+        }
+    }, []);
+
+    const handleKey = (e) => {
+        if (e.key === 'Enter') {
+            if (name.trim()) onConfirm(name.trim());
+            else onCancel();
+        } else if (e.key === 'Escape') {
+            onCancel();
+        }
+    };
+
+    return (
+        <div className="tree-item inline-input-container px-2 py-1 flex items-center gap-2 bg-[var(--bg-selected)]">
+            <span className="file-icon" dangerouslySetInnerHTML={{
+                __html: type === 'folder' ? getFolderIcon(false) : getFileIcon(name).icon
+            }}></span>
+            <input
+                ref={inputRef}
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={handleKey}
+                onBlur={onCancel}
+                className="flex-1 bg-transparent border-none outline-none text-xs text-white"
+                placeholder={type === 'folder' ? 'Folder name' : 'File name'}
+            />
+        </div>
+    );
+}
+
 import CodeforcesExplorer from './CodeforcesExplorer';
 import CodeforcesProblemFilter from './CodeforcesProblemFilter';
 import CodeRunner from './CodeRunner';
@@ -81,8 +115,7 @@ export default function Sidebar({
     entries,
     onOpenFolder,
     onFileClick,
-    onCreateFile,
-    onCreateFolder,
+    onCreateItem,
     activeFile,
     activePanel,
     onCfSettingsClick,
@@ -92,28 +125,68 @@ export default function Sidebar({
     code,
     onShowTerminal,
     onFocusTerminal,
-    onRefresh
+    onRefresh,
+    onCollapse
 }) {
+    const [isCreating, setIsCreating] = useState(null); // 'file', 'folder', or null
+    const [newName, setNewName] = useState('');
+
     if (activePanel === 'codeforces') {
         return (
             <div className="flex flex-col h-full overflow-hidden" style={style}>
+                <div className="flex items-center justify-between p-2 border-b border-[var(--border-color)]">
+                    <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider ml-1">Codeforces</span>
+                    <button onClick={onCollapse} className="p-1 hover:bg-white/10 rounded">
+                        <X size={14} className="opacity-70 hover:opacity-100" />
+                    </button>
+                </div>
                 <div className="flex-1 overflow-hidden" style={{ height: '45%' }}>
                     <CodeforcesExplorer onOpenSettings={onCfSettingsClick} onOpenProblem={onOpenProblem} />
                 </div>
-                <div className="flex-1 overflow-hidden border-t border-[#3c3c3c]" style={{ height: '55%' }}>
+                <div className="flex-1 overflow-hidden border-t border-[var(--border-color)]" style={{ height: '55%' }}>
                     <CodeforcesProblemFilter onOpenProblemFile={onViewProblem} />
                 </div>
             </div>
         );
     }
     if (activePanel === 'run') {
-        return <CodeRunner activeFile={activeFile} code={code} onShowTerminal={onShowTerminal} onFocusTerminal={onFocusTerminal} onRefresh={onRefresh} />;
+        return (
+            <div style={style} className="flex flex-col h-full bg-[var(--bg-sidebar)]">
+                <div className="flex items-center justify-between p-2 border-b border-[var(--border-color)]">
+                    <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider ml-1">Run Code</span>
+                    <button onClick={onCollapse} className="p-1 hover:bg-white/10 rounded text-[var(--text-secondary)]">
+                        <X size={14} className="opacity-70 hover:opacity-100" />
+                    </button>
+                </div>
+                <CodeRunner activeFile={activeFile} code={code} onShowTerminal={onShowTerminal} onFocusTerminal={onFocusTerminal} onRefresh={onRefresh} />
+            </div>
+        );
     }
     if (activePanel === 'test-generator') {
-        return <TestCaseGenerator activeFile={activeFile} code={code} onRefresh={onRefresh} />;
+        return (
+            <div style={style} className="flex flex-col h-full bg-[var(--bg-sidebar)]">
+                <div className="flex items-center justify-between p-2 border-b border-[var(--border-color)]">
+                    <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider ml-1">Test Generator</span>
+                    <button onClick={onCollapse} className="p-1 hover:bg-white/10 rounded text-[var(--text-secondary)]">
+                        <X size={14} className="opacity-70 hover:opacity-100" />
+                    </button>
+                </div>
+                <TestCaseGenerator activeFile={activeFile} code={code} onRefresh={onRefresh} />
+            </div>
+        );
     }
     if (activePanel === 'search') {
-        return <SearchPanel folderPath={folderPath} onFileClick={onFileClick} />;
+        return (
+            <div style={style} className="flex flex-col h-full bg-[var(--bg-sidebar)]">
+                <div className="flex items-center justify-between p-2 border-b border-[var(--border-color)]">
+                    <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider ml-1">Search</span>
+                    <button onClick={onCollapse} className="p-1 hover:bg-white/10 rounded text-[var(--text-secondary)]">
+                        <X size={14} className="opacity-70 hover:opacity-100" />
+                    </button>
+                </div>
+                <SearchPanel folderPath={folderPath} onFileClick={onFileClick} />
+            </div>
+        );
     }
 
     return (
@@ -125,21 +198,55 @@ export default function Sidebar({
                         <button onClick={onRefresh} title="Refresh" className="p-1 hover:bg-white/10 rounded">
                             <RefreshCw size={14} className="opacity-70 hover:opacity-100" />
                         </button>
-                        <button onClick={onCreateFile} title="New File" className="p-1 hover:bg-white/10 rounded">
+                        <button onClick={() => setIsCreating('file')} title="New File" className="p-1 hover:bg-white/10 rounded">
                             <FilePlus size={14} className="opacity-70 hover:opacity-100" />
                         </button>
-                        <button onClick={onCreateFolder} title="New Folder" className="p-1 hover:bg-white/10 rounded">
+                        <button onClick={() => setIsCreating('folder')} title="New Folder" className="p-1 hover:bg-white/10 rounded">
                             <FolderPlus size={14} className="opacity-70 hover:opacity-100" />
+                        </button>
+                        <button onClick={onCollapse} title="Collapse" className="p-1 hover:bg-white/10 rounded ml-1">
+                            <X size={14} className="opacity-70 hover:opacity-100" />
                         </button>
                     </div>
                 )}
             </div>
             {folderPath ? (
                 <>
-                    <div id="folder-header" style={{ display: 'block' }}>
-                        <span id="folder-name" className="folder-name">{folderName}</span>
-                    </div>
                     <div id="file-tree">
+                        {isCreating && (
+                            <div className='tree-item' style={{ paddingLeft: '28px' }}>
+                                <span className='file-icon' dangerouslySetInnerHTML={{ __html: isCreating === 'file' ? getFileIcon(newName).icon : getFolderIcon(false) }} />
+                                <input
+                                    autoFocus
+                                    className='inline-rename-input'
+                                    value={newName}
+                                    onChange={(e) => setNewName(e.target.value)}
+                                    onKeyDown={async (e) => {
+                                        if (e.key === 'Enter' && newName.trim()) {
+                                            const fullPath = folderPath + '/' + newName.trim();
+                                            if (isCreating === 'file') {
+                                                await window.electronAPI.createFile(fullPath);
+                                                onFileClick(fullPath, newName.trim());
+                                            } else {
+                                                await window.electronAPI.createFolder(fullPath);
+                                            }
+                                            setIsCreating(null);
+                                            setNewName('');
+                                            if (onRefresh) onRefresh()
+                                        }
+                                        if (e.key === 'Escape') {
+                                            setIsCreating(null);
+                                            setNewName('');
+                                        }
+                                    }}
+                                    onBlur={() => {
+                                        setTimeout(() => {
+                                            setIsCreating(null);
+                                            setNewName('');
+                                        }, 150);
+                                    }} />
+                            </div>
+                        )}
                         {entries.map((entry) => (
                             <TreeItem
                                 key={entry.path}

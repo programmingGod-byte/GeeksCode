@@ -23,7 +23,7 @@ class TestCaseModel {
             const { getLlama, LlamaChatSession } = await import("node-llama-cpp");
             this.LlamaChatSession = LlamaChatSession;
 
-            this.llama = await getLlama({ gpu: false });
+            this.llama = await getLlama({ gpu: 'auto' });
 
             this.model = await this.llama.loadModel({
                 modelPath: this.modelPath,

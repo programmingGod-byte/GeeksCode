@@ -23,16 +23,46 @@ contextBridge.exposeInMainWorld('electronAPI', {
     readFile: (filePath) => ipcRenderer.invoke('fs:readFile', filePath),
     writeFile: (filePath, content) => ipcRenderer.invoke('fs:writeFile', filePath, content),
     indexProject: (rootPath) => ipcRenderer.invoke('fs:indexProject', rootPath),
+    createFile: (filePath) => ipcRenderer.invoke('fs:createFile', filePath),
+    createFolder: (folderPath) => ipcRenderer.invoke('fs:createFolder', folderPath),
+    deleteFile: (filePath) => ipcRenderer.invoke('fs:deleteFile', filePath),
+    deleteFolder: (folderPath) => ipcRenderer.invoke('fs:deleteFolder', folderPath),
+    rename: (oldPath, newPath) => ipcRenderer.invoke('fs:rename', oldPath, newPath),
+    showContextMenu: (path, isDirectory) => ipcRenderer.send('context-menu:show', { path, isDirectory }),
+    onMenuAction: (callback) => {
+        const subscription = (event, data) => callback(data);
+        ipcRenderer.on('context-menu:action', subscription);
+        return () => ipcRenderer.removeListener('context-menu:action', subscription);
+    },
+    onOpenFolder: (callback) => {
+        const subscription = () => callback();
+        ipcRenderer.on('open-folder', subscription);
+        return () => ipcRenderer.removeListener('open-folder', subscription);
+    },
+    onCloseFolder: (callback) => {
+        const subscription = () => callback();
+        ipcRenderer.on('close-folder', subscription);
+        return () => ipcRenderer.removeListener('close-folder', subscription);
+    },
 
     // Terminal
     createTerminal: (cols, rows) => ipcRenderer.invoke('terminal:create', cols, rows),
     writeTerminal: (data) => ipcRenderer.send('terminal:write', data),
     resizeTerminal: (cols, rows) => ipcRenderer.send('terminal:resize', cols, rows),
     onTerminalData: (callback) => ipcRenderer.on('terminal:data', (_, data) => callback(data)),
+    onTerminalExit: (callback) => {
+        const listener = () => callback();
+        ipcRenderer.on('terminal:exit', listener);
+        return () => ipcRenderer.removeListener('terminal:exit', listener);
+    },
     setTerminalCwd: (cwd) => ipcRenderer.send('terminal:cwd', cwd),
 
     // Tab management
-    onCloseTab: (callback) => ipcRenderer.on('close-active-tab', () => callback()),
+    onCloseTab: (callback) => {
+        const listener = () => callback();
+        ipcRenderer.on('close-active-tab', listener);
+        return () => ipcRenderer.removeListener('close-active-tab', listener);
+    },
 
     // Codeforces
     codeforces: {
@@ -48,7 +78,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onRagProgress: (callback) => ipcRenderer.on('rag:progress', (_, data) => callback(data)),
 
     // AI
+<<<<<<< HEAD
     // AI
+=======
+>>>>>>> origin/main
     initAI: (sessionId) => ipcRenderer.invoke('ai:init', sessionId),
     checkModel: () => ipcRenderer.invoke('ai:check-model'),
     askAI: (prompt, sessionId) => ipcRenderer.invoke('ai:ask', prompt, sessionId),
@@ -64,14 +97,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getZoom: () => ipcRenderer.invoke('app:get-zoom'),
         
     searchFiles: (rootPath, query, options) => ipcRenderer.invoke('fs:search', rootPath, query, options),
-    createFile: (filePath) => ipcRenderer.invoke('fs:createFile', filePath),
-    createFolder: (folderPath) => ipcRenderer.invoke('fs:createFolder', folderPath),
     destroySession: (sessionId) => ipcRenderer.invoke('ai:destroy-session', sessionId),
-    deleteModel: () => ipcRenderer.invoke('ai:delete-model'),
+    deleteModel: (modelId) => ipcRenderer.invoke('ai:delete-model', modelId),
 });
 contextBridge.exposeInMainWorld('run', {
     submit: (a) => ipcRenderer.invoke('submit-code', a),
     parse: (a) => ipcRenderer.invoke('parsed-code', a),
     get_prompts: (a)=>ipcRenderer.invoke('get_prompts',a),
     generateTestCases: (code, count) => ipcRenderer.invoke('generate-testcases', code, count)
-})
+});
