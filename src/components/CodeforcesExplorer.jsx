@@ -18,7 +18,6 @@ export default function CodeforcesExplorer({ onOpenSettings, onOpenProblem }) {
         setLoading(true);
         setError('');
         try {
-            // Fetch User Info
             const userRes = await window.electronAPI.codeforces.getUserInfo(creds.handle);
             if (userRes.status === 'OK' && userRes.result && userRes.result.length > 0) {
                 setUserInfo(userRes.result[0]);
@@ -26,7 +25,6 @@ export default function CodeforcesExplorer({ onOpenSettings, onOpenProblem }) {
                 console.warn("User info fetch failed:", userRes);
             }
 
-            // Fetch Submissions
             const data = await window.electronAPI.codeforces.getSubmissions(creds.handle);
 
             if (data.status === 'OK') {

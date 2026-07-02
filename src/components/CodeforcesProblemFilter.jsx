@@ -6,7 +6,6 @@ export default function CodeforcesProblemFilter({ onOpenProblemFile }) {
     const [problems, setProblems] = useState([]);
     const [loading, setLoading] = useState(false);
     
-    // Filters
     const [topic, setTopic] = useState('');
     const [rating, setRating] = useState('');
     const [tag, setTag] = useState('');

@@ -114,7 +114,7 @@ export default function TabsBar({ tabs, activeTab, onSwitchTab, onCloseTab, onAn
                 })}
             </div>
 
-            <div className="flex items-center px-4 space-x-2 border-l border-[#2b2b2b]">
+            <div className="flex items-center px-4 space-x-2 border-l border-[#2b2b2b] shrink-0">
                 <button
                     onClick={onOpenBrowser}
                     className="flex items-center space-x-1 px-2 py-1 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 text-[11px] transition-colors border border-blue-500/30"
