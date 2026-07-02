@@ -73,7 +73,6 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
         } else {
             const mentions = userMsg.match(/@([\w\.\-]+)/g);
             if (mentions && projectFiles) {
-                console.log(mentions)
                 const fileName = mentions[0].substring(1);
                 const file = projectFiles.find(f => f.name === fileName);
                 if (file && (userMsg.toLowerCase().includes('test') || userMsg.toLowerCase().includes('error') || userMsg.toLowerCase().includes('why') ||
@@ -135,84 +134,6 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
         setLoading(false);
     };
 
-    const handleRunCode = async (code, language) => {
-        if (language !== 'cpp') {
-            alert("Execution is only supported for C++ at the moment.");
-            return;
-        }
-
-        let inputData = "";
-        const choice = prompt("Run Options:\n1. Enter input manually\n2. GeeksAI Generate Input\n3. No input", "1");
-        
-        if (choice === "1") {
-            inputData = prompt("Enter input:") || "";
-        } else if (choice === "2") {
-            setSessions(prev => prev.map(s => 
-                s.id === activeSessionId 
-                    ? { ...s, messages: [...s.messages, { role: 'ai', content: ` **Input Agent**: Analyzing code to generate relevant test cases...` }] }
-                    : s
-            ));
-            const genPrompt = `Generate a sample input for the following C++ code. Provide ONLY the input values, nothing else:\n\n${code}`;
-            inputData = await window.electronAPI.askAI(genPrompt, activeSessionId);
-            inputData = inputData.replace(/```\w*/g, '').replace(/```/g, '').trim();
-        }
-        
-        setSessions(prev => prev.map(s => 
-            s.id === activeSessionId 
-                ? { ...s, messages: [...s.messages, { role: 'ai', content: `⚙️ **Agent Executor**: Compiling and running...\n${inputData ? `*Using ${choice === "2" ? "generated" : "provided"} input:*\n\`\`\`\n${inputData}\n\`\`\`` : '*No input provided*'}` }] }
-                : s
-        ));
-
-        setLoading(true);
-
-        try {
-            // 1. Create a temp file for the code
-            const tempFile = `temp_agent_${Date.now()}.cpp`;
-            const tempPath = await window.electronAPI.runCommand('pwd').then(r => r.stdout.trim() + '/' + tempFile);
-            await window.electronAPI.writeFile(tempPath, code);
-
-            // 2. Compile
-            const compileResult = await window.electronAPI.runCommand(`g++ ${tempFile} -o a.out`, await window.electronAPI.runCommand('pwd').then(r => r.stdout.trim()));
-            
-            if (!compileResult.success) {
-                // FEED BACK TO AI
-                const errorMsg = `Compilation failed:\n${compileResult.stderr}`;
-                setSessions(prev => prev.map(s => 
-                    s.id === activeSessionId 
-                        ? { ...s, messages: [...s.messages, { role: 'ai', content: `❌ **Compilation Error**:\n\`\`\`\n${compileResult.stderr}\n\`\`\`\n\nAttempting to fix...` }] }
-                        : s
-                ));
-
-                const fixPrompt = `The code I just generated failed to compile. Here is the error:\n\n${compileResult.stderr}\n\nPlease provide a corrected version of the code.`;
-                const fixedResponse = await window.electronAPI.askAI(fixPrompt, activeSessionId);
-                
-                setSessions(prev => prev.map(s => 
-                    s.id === activeSessionId 
-                        ? { ...s, messages: [...s.messages, { role: 'ai', content: fixedResponse }] }
-                        : s
-                ));
-            } else {
-                const runCmd = `echo "${inputData.replace(/"/g, '\\"')}" | ./a.out`;
-                const runResult = await window.electronAPI.runCommand(runCmd, await window.electronAPI.runCommand('pwd').then(r => r.stdout.trim()));
-                
-                let output = `**Execution Success**:\n**Output:**\n\`\`\`\n${runResult.stdout || '(No output)'}\n\`\`\``;
-                if (runResult.stderr) {
-                    output += `\n**Errors/Stderr:**\n\`\`\`\n${runResult.stderr}\n\`\`\``;
-                }
-                
-                setSessions(prev => prev.map(s => 
-                    s.id === activeSessionId 
-                        ? { ...s, messages: [...s.messages, { role: 'ai', content: output }] }
-                        : s
-                ));
-            }
-        } catch (e) {
-            console.error("Execution Agent failed:", e);
-        } finally {
-            setLoading(false);
-            setAgentStatus(null);
-        }
-    };
 
     const updateAgentMessage = (content, keepPrevious = true) => {
         setSessions(prev => prev.map(s => {
@@ -249,7 +170,6 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
                 setAgentStatus("Compiling...");
                 updateAgentMessage(`[1/3]  Compiling \`${fileName}\`...`);
                 const prompts=await window.run.get_prompts(content);
-                console.log(prompts)
                 if (prompts.length>0){
                     updateAgentMessage(`Kindly submit the c++ code without special prompts for error checking`)
                     return;
@@ -270,14 +190,13 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
                 let inputData = "";
                 if (isTestRequest) {
                     updateAgentMessage(`[2/3]  Generating test input...`);
-                    const genPrompt = `Generate a sample input for this C++ code. Provide ONLY the raw input values:\n\n${content}`;
-                    inputData = await window.electronAPI.askAI(genPrompt, activeSessionId);
-                    inputData = inputData.replace(/```\w*/g, '').replace(/```/g, '').trim();
-                    updateAgentMessage(`*Using generated input:*\n\`\`\`\n${inputData}\n\`\`\``);
+                    inputData = await window.run.generateTestCases(content,1);
+                    updateAgentMessage(`*Using generated input:*\n\`\`\`\n${inputData.testCases[0]}\n\`\`\``);
                 }
 
                 updateAgentMessage(`[3/3]  Running with input...`);
-                const runCmd = `echo "${inputData.replace(/"/g, '\\"')}" | ./a.out`;
+                const runCmd = `echo "${inputData.testCases[0]}" | ./a.out`;
+                console.log(runCmd);
                 const runResult = await window.electronAPI.runCommand(runCmd, dirPath);
                 
                 let output = ` **Execution Finished**:\n**Output:**\n\`\`\`\n${runResult.stdout || '(No output)'}\n\`\`\``;
@@ -372,7 +291,6 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
 
     const getFilteredMentions = () => {
         if (mentionSearch === null) return [];
-        console.log(input)
         const query = input.substring(mentionSearch + 1).toLowerCase();
         return (projectFiles || [])
             .filter(f => f.name.toLowerCase().includes(query))
@@ -457,7 +375,7 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
                                 {msg.role === 'user' ? 'You' : 'GeeksAI'}
                             </span>
                         </div>
-                            <div className={`pl-6 text-[13px] leading-relaxed allow-select ${isDark ? 'text-gray-300' : 'text-gray-800'}`}>
+                            <div className={`pl-6 text-[13px] leading-relaxed allow-select whitespace-pre-wrap ${isDark ? 'text-gray-300' : 'text-gray-800'}`}>
                                  {msg.role === 'ai' ? (
                                     <ReactMarkdown 
                                         remarkPlugins={[remarkGfm]}
@@ -477,14 +395,6 @@ const AIChat = ({ sessions, setSessions, activeSessionId, setActiveSessionId, th
                                                             >
                                                                 <Copy size={10} />
                                                                 <span>Copy</span>
-                                                            </button>
-                                                            <button 
-                                                                onClick={() => handleRunCode(codeContent, match[1])}
-                                                                className="p-1 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-[10px] flex items-center space-x-1 shadow-lg"
-                                                                title="Run Code"
-                                                            >
-                                                                <Play size={10} />
-                                                                <span>Run</span>
                                                             </button>
                                                         </div>
                                                         <SyntaxHighlighter

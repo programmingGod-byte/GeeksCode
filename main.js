@@ -1028,7 +1028,6 @@ ipcMain.handle('ai:ask', async (event, userPrompt, sessionId = 'default') => {
 ipcMain.handle('ai:destroy-session', async (event, sessionId) => {
   if (sessions.has(sessionId)) {
     const sessionData = sessions.get(sessionId);
-    // Dispose context sequence if available
     if (sessionData.sequence) {
       try {
         if (!sessionData.sequence.disposed) {
