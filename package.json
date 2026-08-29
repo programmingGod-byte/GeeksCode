@@ -55,7 +55,6 @@
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
-    "@vitejs/plugin-react": "^4.2.1",
     "@vscode/codicons": "^0.0.44",
     "axios": "^1.13.5",
     "electron-prompt": "^1.7.0",
@@ -70,12 +69,14 @@
     "react-syntax-highlighter": "^16.1.0",
     "remark-gfm": "^4.0.1",
     "vectra": "^0.12.3",
-    "vite": "^6.1.0",
-    "xterm": "^5.3.0",
-    "xterm-addon-fit": "^0.8.0"
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.3",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.24",
     "concurrently": "^9.2.1",
     "electron": "^40.4.1",
@@ -83,6 +84,7 @@
     "node-gyp": "^10.0.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.1",
+    "vite": "^6.1.0",
     "wait-on": "^8.0.5"
   }
 }
